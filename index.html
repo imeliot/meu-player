@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meu Player</title>
+    <!-- PWA: dá pra instalar como aplicativo (manifest + ícones + cor da barra) -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#262624" />
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="preload" href="fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/style.css" />
+    <!-- Aplica o tema salvo antes de desenhar a página (evita piscar o tema padrão) -->
+    <script>
+      try {
+        const saved = JSON.parse(localStorage.getItem('theme_active'));
+        for (const [name, value] of Object.entries(saved?.vars ?? {})) {
+          if (/^--[a-z-]+$/.test(name)) document.documentElement.style.setProperty(name, value);
+        }
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <!-- Tela de boot: aparece por menos de 1 segundo, sem bloquear cliques -->
+    <div id="boot" class="boot" aria-hidden="true" hidden></div>
+
+    <!-- Tela de login (aparece quando não está logado).
+         Elementos com class="box" ganham bordas ┌─┐ via JS (ui.js → decorateBoxes). -->
+    <main id="login-view" class="login" hidden>
+      <section class="box login-box" data-title="meu player">
+        <p>&gt; meu player v0.4</p>
+        <p id="login-msg" class="error-text" hidden></p>
+        <p class="dim">&gt; entre com sua conta spotify premium pra ver sua biblioteca.</p>
+        <button id="login-btn" class="btn">[ entrar com spotify ]</button>
+      </section>
+    </main>
+
+    <!-- Tela principal (depois do login) -->
+    <div id="library-view" class="app" data-tab="list" hidden>
+      <!-- Abas: só aparecem em telas estreitas (celular) -->
+      <nav class="tabs" role="tablist" aria-label="Painéis">
+        <button class="tab" role="tab" data-tab="library">[biblioteca]</button>
+        <button class="tab" role="tab" data-tab="list">[lista]</button>
+        <button class="tab" role="tab" data-tab="now">[tocando]</button>
+        <button class="tab" role="tab" data-tab="config">[config]</button>
+      </nav>
+
+      <!-- Esquerda: biblioteca -->
+      <section id="panel-library" class="box panel-library" data-title="biblioteca" data-panel="library">
+        <div class="lib-user">
+          <span class="dim">user:</span> <span id="user-name">…</span>
+          <button id="config-open" class="btn-link">[config]</button>
+          <button id="logout-btn" class="btn-link">[sair]</button>
+        </div>
+        <button id="liked-entry" class="lib-item selected" type="button">
+          <span class="lib-name">músicas curtidas</span>
+          <span id="tracks-count" class="dim"></span>
+        </button>
+        <p class="lib-heading dim">-- playlists (<span id="playlists-count">0</span>) --</p>
+        <ul id="playlists-list" class="list"></ul>
+        <button id="playlists-more" class="btn-link" hidden>[carregar mais]</button>
+        <button id="playlist-create" class="btn-link">[+ nova playlist]</button>
+      </section>
+
+      <!-- Direita: lista de músicas (curtidas ou da playlist escolhida) -->
+      <section id="panel-list" class="box panel-list" data-title="lista: músicas curtidas" data-panel="list">
+        <!-- Ferramentas da playlist aberta -->
+        <div id="playlist-detail" class="list-tools" hidden>
+          <div class="tool-row">
+            <button id="playlist-play" class="btn-link">[&gt; tocar playlist]</button>
+            <button id="playlist-edit" class="btn-link" hidden>[editar]</button>
+            <button id="playlist-delete" class="btn-link danger">[excluir]</button>
+          </div>
+          <p id="playlist-description" class="dim" hidden></p>
+          <p id="playlist-note" class="dim" hidden></p>
+        </div>
+
+        <div class="track-head" aria-hidden="true">
+          <span class="col-num">#</span>
+          <span class="col-title">título</span>
+          <span class="col-artist">artista</span>
+          <span class="col-time">tempo</span>
+          <span class="col-actions"></span>
+        </div>
+
+        <div id="liked-view">
+          <ul id="tracks-list" class="list"></ul>
+          <button id="tracks-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+
+        <div id="playlist-view" hidden>
+          <ul id="playlist-items" class="list"></ul>
+          <button id="playlist-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+
+        <!-- Resultados da busca "?texto" -->
+        <div id="search-view" hidden>
+          <p id="search-empty" class="dim" hidden>&gt; nada encontrado.</p>
+          <ul id="search-list" class="list"></ul>
+          <button id="search-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+      </section>
+
+      <!-- Configurações: no computador aparece no lugar da lista; no celular é uma aba.
+           O conteúdo das listas é montado em js/config.js. -->
+      <section id="panel-config" class="box panel-config" data-title="config" data-panel="config">
+        <div class="tool-row config-close-row">
+          <button id="config-close" class="btn-link">[fechar]</button>
+        </div>
+
+        <p class="section-heading dim">-- tema --</p>
+        <ul id="theme-list" class="list"></ul>
+        <p id="theme-sync" class="dim"></p>
+
+        <p class="section-heading dim">-- fonte --</p>
+        <ul id="font-list" class="list"></ul>
+
+        <p class="section-heading dim">-- editor --</p>
+        <div id="color-fields" class="color-fields"></div>
+        <div class="tool-row">
+          <button id="theme-reset" class="btn-link">[desfazer mudanças]</button>
+          <button id="theme-save" class="btn-link accent" hidden>[salvar alterações]</button>
+          <button id="theme-delete" class="btn-link danger" hidden>[apagar tema]</button>
+        </div>
+        <div class="inline-form">
+          <label class="inline-field">
+            <span class="dim">nome:</span>
+            <input id="theme-name" class="line-input" maxlength="30" autocomplete="off" />
+          </label>
+          <button id="theme-save-new" class="btn-link accent">[salvar como novo tema]</button>
+        </div>
+
+        <p class="section-heading dim">-- backup --</p>
+        <div class="inline-form">
+          <button id="theme-export" class="btn-link">[exportar tema atual]</button>
+          <input id="theme-export-line" class="line-input" readonly hidden aria-label="Linha do tema exportado" />
+        </div>
+        <div class="inline-form">
+          <input id="theme-import-line" class="line-input" placeholder="v1|nome|cores|fonte" aria-label="Linha de tema pra importar" />
+          <button id="theme-import" class="btn-link">[importar]</button>
+        </div>
+      </section>
+
+      <!-- Embaixo: tocando agora -->
+      <section id="panel-now" class="box panel-now" data-title="tocando agora" data-panel="now">
+        <div class="now">
+          <!-- Capa pixelada (desenhada em player.js) -->
+          <canvas id="pb-cover" class="pb-cover" width="24" height="24" aria-hidden="true"></canvas>
+
+          <div class="now-main">
+            <p id="pb-status" class="dim">&gt; carregando player…</p>
+            <p id="pb-info" class="now-title" hidden>
+              <span id="pb-title"></span> <span class="dim">-</span> <span id="pb-artist" class="dim"></span>
+            </p>
+
+            <!-- Progresso: o texto [===>---] é o desenho; o <input> invisível por cima recebe cliques e teclado -->
+            <div class="now-progress">
+              <span id="pb-position" class="dim">0:00</span>
+              <span class="ascii-range">
+                <span id="pb-progress-bar" class="ascii-bar" aria-hidden="true"></span>
+                <input id="pb-progress" type="range" min="0" max="1" value="0" step="1000" aria-label="Progresso da música" />
+              </span>
+              <span id="pb-duration" class="dim">0:00</span>
+            </div>
+
+            <div class="now-controls">
+              <button id="pb-shuffle" class="btn-link mode-btn" aria-pressed="false">shuffle:OFF</button>
+              <button id="pb-prev" class="btn-link" aria-label="Anterior">[|&lt;]</button>
+              <button id="pb-toggle" class="btn-link pb-toggle" aria-label="Tocar">[ &gt; ]</button>
+              <button id="pb-next" class="btn-link" aria-label="Próxima">[&gt;|]</button>
+              <button id="pb-repeat" class="btn-link mode-btn" aria-label="Repetir: desligado">repeat:OFF</button>
+              <span class="now-volume">
+                <span class="dim">vol</span>
+                <span class="ascii-range ascii-range-fixed">
+                  <span id="pb-volume-bar" class="ascii-bar" aria-hidden="true"></span>
+                  <input id="pb-volume" type="range" min="0" max="100" value="50" aria-label="Volume" />
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Linha de comando: "/" ou ":" em qualquer lugar foca aqui (js/cmdline.js).
+           Avisos e respostas dos comandos aparecem logo acima dela. -->
+      <div class="cmdline">
+        <p id="notice" class="notice" role="status" hidden>
+          <span id="notice-text"></span>
+          <button id="notice-close" class="btn-link" aria-label="Fechar aviso">[x]</button>
+        </p>
+        <pre id="cmd-output" class="cmd-output" role="status" hidden></pre>
+        <p id="cmd-hint" class="dim cmd-hint" hidden></p>
+        <div class="prompt">
+          <label for="cmd-input" class="dim">player@spotify:~$</label>
+          <span class="cmd-field">
+            <input
+              id="cmd-input"
+              class="cmd-input"
+              type="text"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              enterkeyhint="go"
+              placeholder="  :help = ajuda"
+              aria-label="Linha de comando (digite :help pra ver os comandos)"
+            />
+            <!-- Cursor piscando: aparece só quando a caixa está vazia e sem foco -->
+            <span class="cursor" aria-hidden="true"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Janela de confirmação -->
+      <dialog id="confirm-dialog" class="dialog">
+        <form method="dialog" class="box" data-title="confirmar">
+          <p id="confirm-text"></p>
+          <div class="dialog-actions">
+            <button value="cancel" class="btn-link">[cancelar]</button>
+            <button value="ok" id="confirm-ok" class="btn-link danger">[confirmar]</button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- Janela de criar/editar playlist -->
+      <dialog id="playlist-dialog" class="dialog">
+        <form method="dialog" class="box" data-title="playlist">
+          <p id="pf-title" class="dialog-heading"></p>
+          <label class="field">
+            <span class="dim">nome:</span>
+            <input id="pf-name" required maxlength="100" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="dim">descrição (opcional):</span>
+            <textarea id="pf-description" rows="3" maxlength="300"></textarea>
+          </label>
+          <label id="pf-public-row" class="field-check">
+            <input id="pf-public" type="checkbox" />
+            <span>pública (aparece no seu perfil)</span>
+          </label>
+          <div class="dialog-actions">
+            <button value="cancel" formnovalidate class="btn-link">[cancelar]</button>
+            <button value="ok" class="btn-link accent">[salvar]</button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- Janela de escolher playlist ("adicionar a…") -->
+      <dialog id="picker-dialog" class="dialog">
+        <form method="dialog" class="box" data-title="adicionar à playlist">
+          <p id="picker-track" class="dim"></p>
+          <ul id="picker-list" class="list picker-list"></ul>
+          <div class="dialog-actions">
+            <button value="" class="btn-link">[cancelar]</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

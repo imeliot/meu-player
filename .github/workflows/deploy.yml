@@ -1,0 +1,59 @@
+# Publica o app no GitHub Pages a cada push na branch main.
+# O app não precisa de compilação: o "build" só separa os arquivos do site em _site/,
+# carimba a versão do service worker e confere se nada ficou faltando.
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # permite rodar à mão pela aba Actions
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Uma publicação por vez; a que está rodando não é cancelada.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Montar o site em _site/
+        run: |
+          mkdir _site
+          cp -r index.html callback css js fonts icons manifest.webmanifest sw.js _site/
+          # Cada publicação ganha um cache novo no service worker (código curto do commit).
+          sed -i "s/^const VERSION = 'dev';/const VERSION = '${GITHUB_SHA::8}';/" _site/sw.js
+          grep -q "^const VERSION = '${GITHUB_SHA::8}';" _site/sw.js
+          # Confere se todo arquivo da lista SHELL do service worker existe.
+          python3 - <<'PY'
+          import pathlib, re, sys
+          sw = pathlib.Path('_site/sw.js').read_text()
+          shell = re.findall(r"^\s+'([^']+)',$", sw.split('const SHELL = [')[1].split('];')[0], re.M)
+          missing = [p for p in shell if p != './' and not pathlib.Path('_site', p).is_file()]
+          if missing:
+              sys.exit(f'Arquivos da lista SHELL que não existem: {missing}')
+          print(f'SHELL ok: {len(shell)} arquivos')
+          PY
+
+      - name: Configurar o Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar o site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v5

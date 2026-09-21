@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entrando…</title>
+    <meta name="theme-color" content="#262624" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <!-- Aplica o tema salvo antes de desenhar a página (evita piscar o tema padrão) -->
+    <script>
+      try {
+        const saved = JSON.parse(localStorage.getItem('theme_active'));
+        for (const [name, value] of Object.entries(saved?.vars ?? {})) {
+          if (/^--[a-z-]+$/.test(name)) document.documentElement.style.setProperty(name, value);
+        }
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <!-- O Spotify volta pra cá depois do login, com um "code" na URL. -->
+    <main class="login">
+      <section class="box login-box" data-title="login">
+        <p id="status">&gt; entrando…</p>
+        <a href="../" id="back" class="btn" hidden>[ voltar ]</a>
+      </section>
+    </main>
+
+    <script type="module">
+      import { handleCallback } from '../js/auth.js';
+      import { decorateBoxes } from '../js/ui.js';
+      import { APP_ROOT } from '../js/config.js';
+
+      decorateBoxes();
+      try {
+        await handleCallback();
+        location.replace(APP_ROOT); // deu certo: vai pra página principal
+      } catch (err) {
+        document.querySelector('#status').textContent = `! erro: ${err.message}`;
+        document.querySelector('#status').className = 'error-text';
+        document.querySelector('#back').hidden = false;
+      }
+    </script>
+  </body>
+</html>

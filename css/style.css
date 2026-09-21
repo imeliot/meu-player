@@ -1,0 +1,1031 @@
+/* Layout e componentes, estilo terminal.
+   Cores, fontes e medidas vêm de theme.css (var(--...)).
+   Regras do visual: sem sombras, sem cantos arredondados, sem gradientes. */
+
+* {
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-main), var(--font-box); /* o que faltar no VT323 (ex: ♥) vem da Departure */
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+
+  /* Fonte de pixel: sem negrito/itálico falso e sem suavização onde o navegador deixa
+     (no macOS funciona; no Linux/Windows quem manda é o sistema, por isso os tamanhos exatos). */
+  font-synthesis: none;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+p {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font: inherit;
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+
+.error-text {
+  color: var(--error);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Barra de rolagem discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ---------- Botões ---------- */
+
+/* Todos os botões são texto puro, tipo [assim] */
+button,
+.btn,
+.btn-link {
+  font: inherit;
+  line-height: var(--line-height);
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+
+.btn,
+.btn-link.accent {
+  color: var(--accent);
+}
+
+.btn-link:hover,
+.btn:hover,
+.lib-item:hover .lib-name,
+.item:hover .col-title {
+  color: var(--accent);
+}
+
+.btn-link.danger {
+  color: var(--error);
+}
+
+button:disabled {
+  color: var(--text-dim);
+  cursor: default;
+  opacity: 0.5;
+}
+
+button:disabled:hover {
+  color: var(--text-dim);
+}
+
+/* Foco do teclado: fundo na cor da borda, sem contorno arredondado */
+:focus-visible {
+  outline: none;
+  background: var(--border);
+}
+
+/* ---------- Painéis com bordas de caixa ┌─ título ───┐ ---------- */
+
+.box {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+}
+
+/* Linhas de cima e de baixo */
+.box-top,
+.box-bottom {
+  display: flex;
+  flex-shrink: 0;
+  height: var(--box-line);
+  overflow: hidden;
+  white-space: pre;
+  font-family: var(--font-box);
+  font-size: var(--box-size);
+  line-height: var(--box-line);
+  color: var(--border);
+}
+
+.box-ch {
+  flex-shrink: 0;
+}
+
+/* Traço ──── que estica até o canto (o que sobra é cortado) */
+.box-fill {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Título embutido na borda: usa a fonte do texto */
+.box-title {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-main), var(--font-box);
+  font-size: var(--font-size);
+  line-height: var(--box-line);
+  color: var(--text);
+}
+
+/* Meio: lateral │ + conteúdo + lateral │ */
+.box-mid {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.box-side {
+  flex-shrink: 0;
+  /* As 200 linhas de │ não podem aumentar a altura do painel: "contain: size" faz o
+     navegador ignorar o tamanho do conteúdo; a largura é fixada em 1 caractere. */
+  contain: size;
+  width: 1ch;
+  overflow: hidden;
+  white-space: pre;
+  font-family: var(--font-box);
+  font-size: var(--box-size);
+  line-height: var(--box-line);
+  color: var(--border);
+}
+
+.box-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--pad);
+}
+
+/* ---------- Tela de boot ---------- */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: var(--pad) calc(var(--pad) * 2);
+  background: var(--bg);
+  pointer-events: none; /* não bloqueia cliques: o app já está funcionando por baixo */
+  transition: opacity 0.2s steps(3);
+}
+
+.boot.boot-done {
+  opacity: 0;
+}
+
+.boot .ok {
+  color: var(--accent);
+}
+
+/* ---------- Login ---------- */
+
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--gap);
+}
+
+.login-box {
+  width: min(64ch, 100%);
+}
+
+.login-box .box-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-height);
+  padding-top: var(--pad);
+  padding-bottom: var(--pad);
+}
+
+/* ---------- App (layout do computador) ---------- */
+
+.app {
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(30ch, 1fr) 3fr;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'library list'
+    'now now'
+    'cmd cmd';
+  gap: var(--gap);
+  padding: var(--gap);
+}
+
+.tabs {
+  display: none;
+}
+
+.panel-library {
+  grid-area: library;
+}
+
+.panel-list {
+  grid-area: list;
+}
+
+.panel-now {
+  grid-area: now;
+}
+
+/* [config] no computador: ocupa o lugar da lista enquanto estiver aberto */
+.panel-config {
+  grid-area: list;
+}
+
+.app:not([data-tab='config']) .panel-config,
+.app[data-tab='config'] .panel-list {
+  display: none;
+}
+
+.cmdline {
+  grid-area: cmd;
+  padding: 0 var(--pad);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- Biblioteca ---------- */
+
+.lib-user {
+  display: flex;
+  gap: 1ch;
+  white-space: nowrap;
+}
+
+.lib-user #user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.lib-heading {
+  margin-top: var(--line-height);
+}
+
+/* Item da biblioteca: "  nome  12"; o selecionado vira "> nome  12" */
+.lib-item {
+  display: flex;
+  gap: 1ch;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.lib-item::before {
+  content: '  ';
+  white-space: pre;
+  flex-shrink: 0;
+}
+
+.lib-item.selected::before {
+  content: '> ';
+  color: var(--accent);
+}
+
+.lib-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lib-item.selected .lib-name {
+  color: var(--accent);
+}
+
+/* ---------- Lista de músicas em colunas ---------- */
+
+.list-tools {
+  margin-bottom: var(--line-height);
+}
+
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 2ch;
+}
+
+/* Colunas: # | título | artista | tempo | ações */
+.track-head,
+.item {
+  display: grid;
+  grid-template-columns: 5ch minmax(0, 3fr) minmax(0, 2fr) 6ch;
+  column-gap: 2ch;
+  align-items: baseline;
+}
+
+.track-head {
+  grid-template-columns: 5ch minmax(0, 3fr) minmax(0, 2fr) 6ch 9ch;
+  color: var(--text-dim);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9ch;
+  column-gap: 2ch;
+  align-items: baseline;
+}
+
+.item {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.col-title,
+.col-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-num,
+.col-time {
+  text-align: right;
+  color: var(--text-dim);
+  white-space: pre;
+}
+
+.col-artist {
+  color: var(--text-dim);
+}
+
+/* Música tocando: ">" na cor de destaque antes do número */
+.item.playing .col-num::before {
+  content: '> ';
+}
+
+.item.playing .col-num,
+.item.playing .col-title {
+  color: var(--accent);
+}
+
+/* Botões de ação da linha: ♥ + - :: */
+.row-actions {
+  display: flex;
+  gap: 1ch;
+  white-space: nowrap;
+}
+
+.row-action {
+  color: var(--text-dim);
+}
+
+.heart.liked {
+  color: var(--accent);
+}
+
+.drag-handle {
+  color: var(--text-dim);
+  cursor: grab;
+  user-select: none;
+}
+
+.row.dragging {
+  opacity: 0.4;
+}
+
+/* Onde a música vai cair ao arrastar: linha tracejada em cima ou embaixo */
+.row.drop-before {
+  border-top: 2px dashed var(--accent);
+}
+
+.row.drop-after {
+  border-bottom: 2px dashed var(--accent);
+}
+
+/* ---------- Tocando agora ---------- */
+
+.now {
+  display: flex;
+  gap: 2ch;
+  align-items: flex-start;
+  padding: calc(var(--pad) / 2) 0;
+}
+
+/* Capa pixelada: o canvas é pequeno (24×24) e é ampliado sem suavizar */
+.pb-cover {
+  width: var(--cover-size);
+  height: var(--cover-size);
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: var(--bg);
+}
+
+.now-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.now-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-progress {
+  display: flex;
+  gap: 1ch;
+  align-items: center;
+}
+
+.now-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 2ch;
+}
+
+.mode-btn {
+  color: var(--text-dim);
+}
+
+.mode-btn.active {
+  color: var(--accent);
+}
+
+/* Largura fixa pra [ > ] e [ || ] não empurrarem os vizinhos */
+.pb-toggle {
+  min-width: 6ch;
+  text-align: center;
+}
+
+.now-volume {
+  display: inline-flex;
+  gap: 1ch;
+  align-items: center;
+}
+
+/* Barra ASCII [====>----] com um <input range> invisível por cima */
+.ascii-range {
+  position: relative;
+  flex: 1;
+  min-width: 12ch;
+  height: var(--line-height);
+}
+
+.ascii-range-fixed {
+  flex: none;
+  width: 12ch;
+  min-width: 0;
+}
+
+.ascii-bar {
+  position: absolute;
+  inset: 0;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--accent);
+}
+
+.ascii-range input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ascii-range input:disabled {
+  cursor: default;
+}
+
+.ascii-range:has(input:disabled) .ascii-bar {
+  color: var(--text-dim);
+}
+
+/* Foco do teclado na barra: fundo na cor da borda */
+.ascii-range:has(input:focus-visible) {
+  background: var(--border);
+}
+
+/* ---------- Painel [config] ---------- */
+
+.config-close-row {
+  justify-content: flex-end;
+}
+
+.section-heading {
+  margin-top: var(--line-height);
+}
+
+/* 6 quadradinhos com as cores do tema */
+.swatches {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: center;
+  border: 2px solid var(--border);
+}
+
+.swatch {
+  width: 1ch;
+  height: 1ch;
+}
+
+.theme-tag {
+  flex-shrink: 0;
+  min-width: 8ch;
+}
+
+/* Editor de cores: nome | seletor | #hex */
+.color-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24ch, 1fr));
+  column-gap: 2ch;
+}
+
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  cursor: pointer;
+}
+
+.color-name {
+  min-width: 9ch;
+}
+
+.color-field input[type='color'] {
+  width: 4ch;
+  height: calc(var(--line-height) - 6px);
+  padding: 0;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.color-field input[type='color']::-moz-color-swatch {
+  border: none;
+}
+
+.color-field input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-field input[type='color']::-webkit-color-swatch {
+  border: none;
+}
+
+/* Linha com campo de texto + botão */
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1ch 2ch;
+  margin-top: calc(var(--line-height) / 4);
+}
+
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  flex: 1;
+  min-width: 20ch;
+}
+
+.line-input {
+  flex: 1;
+  min-width: 16ch;
+  font: inherit;
+  line-height: var(--line-height);
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  padding: 0 1ch;
+}
+
+.line-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.line-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* ---------- Linha de comando e avisos ---------- */
+
+.notice {
+  display: flex;
+  gap: 1ch;
+}
+
+.notice-text-wrap,
+#notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-error {
+  color: var(--error);
+}
+
+.notice-success {
+  color: var(--ok);
+}
+
+.prompt {
+  display: flex;
+  gap: 1ch;
+  white-space: nowrap;
+}
+
+.prompt label {
+  cursor: text;
+}
+
+/* Caixa de digitar sem cara de caixa: parece continuação do prompt */
+.cmd-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.cmd-input {
+  width: 100%;
+  font: inherit;
+  line-height: var(--line-height);
+  color: var(--text);
+  background: transparent;
+  border: none;
+  padding: 0;
+  outline: none;
+  caret-color: var(--cursor);
+  caret-shape: block; /* cursor em bloco onde o navegador suporta */
+}
+
+.cmd-input::placeholder {
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+.cmd-input:focus-visible {
+  background: transparent;
+}
+
+.cmd-field .cursor {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Com foco ou com texto, quem aparece é o cursor de verdade da caixa */
+.cmd-field:has(.cmd-input:focus) .cursor,
+.cmd-field:has(.cmd-input:not(:placeholder-shown)) .cursor {
+  display: none;
+}
+
+/* Resposta dos comandos (ex: :help); rola se for comprida */
+.cmd-output {
+  margin: 0;
+  font: inherit;
+  line-height: var(--line-height);
+  white-space: pre-wrap;
+  max-height: calc(var(--line-height) * 8);
+  overflow-y: auto;
+}
+
+.cmd-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Música escolhida pelo teclado (usada pelo :add) */
+.row.kb-selected {
+  background: var(--border);
+}
+
+/* Cursor piscando */
+.cursor {
+  display: inline-block;
+  width: 1ch;
+  height: 0.8em;
+  vertical-align: baseline;
+  background: var(--cursor);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}
+
+/* ---------- Janelas (dialogs) ---------- */
+
+.dialog {
+  width: min(60ch, calc(100vw - 2 * var(--gap)));
+  max-height: calc(100dvh - 2 * var(--gap));
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+}
+
+.dialog::backdrop {
+  background: var(--backdrop);
+}
+
+.dialog .box-body {
+  padding-top: calc(var(--pad) / 2);
+  padding-bottom: calc(var(--pad) / 2);
+}
+
+.dialog-heading {
+  margin-bottom: var(--line-height);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2ch;
+  margin-top: var(--line-height);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: calc(var(--line-height) / 2);
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  line-height: var(--line-height);
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  padding: 0 1ch;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field-check {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  cursor: pointer;
+}
+
+.field-check input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.picker-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+/* ---------- Celular: painéis viram abas ---------- */
+
+@media (max-width: 760px) {
+  :root {
+    --pad: 6px;
+  }
+
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'tabs'
+      'main'
+      'cmd';
+  }
+
+  .tabs {
+    grid-area: tabs;
+    display: flex;
+    justify-content: space-between;
+    overflow-x: auto; /* se a fonte for larga, as abas rolam em vez de quebrar */
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  /* Linha de comando fácil de tocar */
+  .cmd-input,
+  .prompt label {
+    min-height: var(--touch);
+    display: flex;
+    align-items: center;
+  }
+
+  /* No celular as abas já fecham o [config] */
+  .config-close-row {
+    display: none;
+  }
+
+  .tab {
+    min-height: var(--touch);
+    padding: 0 2px;
+    color: var(--text-dim);
+  }
+
+  .tab[aria-selected='true'] {
+    color: var(--accent);
+  }
+
+  /* Todos os painéis no mesmo lugar; só o da aba ativa aparece */
+  .panel-library,
+  .panel-list,
+  .panel-now {
+    grid-area: main;
+  }
+
+  .panel-config {
+    grid-area: main;
+  }
+
+  .app[data-tab='config'] .box[data-panel]:not([data-panel='config']),
+  .app[data-tab='library'] .box[data-panel]:not([data-panel='library']),
+  .app[data-tab='list'] .box[data-panel]:not([data-panel='list']),
+  .app[data-tab='now'] .box[data-panel]:not([data-panel='now']) {
+    display: none;
+  }
+
+  /* Botões grandes o bastante pro dedo */
+  .btn,
+  .btn-link,
+  .lib-item,
+  .item,
+  .row-action,
+  .drag-handle {
+    min-height: var(--touch);
+  }
+
+  .row-actions {
+    gap: 0;
+  }
+
+  .row-action,
+  .drag-handle {
+    min-width: calc(var(--touch) - 8px);
+    justify-content: center;
+  }
+
+  .lib-item,
+  .btn-link,
+  .row-action,
+  .drag-handle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .lib-item {
+    display: flex;
+  }
+
+  /* Lista: # | título (artista embaixo) | tempo; ações na direita */
+  .track-head {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 1ch;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .item {
+    grid-template-columns: 4ch minmax(0, 1fr) 5ch;
+    column-gap: 1ch;
+    align-items: center;
+  }
+
+  .col-num {
+    grid-row: 1 / 3;
+  }
+
+  .col-title {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+
+  .col-artist {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .col-time {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  /* Tocando agora ocupa a aba inteira */
+  .now {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pb-cover {
+    width: calc(var(--cover-size) * 2);
+    height: calc(var(--cover-size) * 2);
+  }
+
+  .now-main {
+    width: 100%;
+  }
+
+  /* Controles em linhas: [|<] [||] [>|] / shuffle repeat / volume */
+  .now-controls {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    justify-items: center;
+    row-gap: 4px;
+  }
+
+  #pb-prev,
+  #pb-toggle,
+  #pb-next {
+    grid-column: span 2;
+  }
+
+  #pb-prev {
+    order: 1;
+  }
+
+  #pb-toggle {
+    order: 2;
+  }
+
+  #pb-next {
+    order: 3;
+  }
+
+  #pb-shuffle,
+  #pb-repeat {
+    order: 4;
+    grid-column: span 3;
+  }
+
+  .now-volume {
+    order: 5;
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .now-volume .ascii-range-fixed {
+    flex: 1;
+  }
+}
+
+/* Em telas de toque, arrastar não funciona (o arrastar do navegador é só de mouse):
+   esconde a alça pra sobrar espaço pro título. */
+@media (pointer: coarse) {
+  .drag-handle {
+    display: none !important;
+  }
+}

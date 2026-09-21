@@ -1,0 +1,61 @@
+/* TEMA: valores padrão de cores, fontes e medidas.
+   Os temas escolhidos no menu [config] sobrescrevem as cores e a fonte daqui
+   (os temas fixos ficam em js/presets.js). As cores abaixo = tema "claude". */
+
+/* Fontes guardadas no projeto (pasta fonts/), funcionam offline. Licença: SIL OFL. */
+@font-face {
+  font-family: 'VT323';
+  src: url('../fonts/VT323-Regular.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Departure Mono';
+  src: url('../fonts/DepartureMono-Regular.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-display: swap;
+}
+
+:root {
+  /* ---------- Paleta ---------- */
+  --bg: #262624; /* fundo da página */
+  --panel: #30302e; /* fundo dos painéis */
+  --border: #4a4945; /* bordas ┌─┐ */
+  --text: #f5f4ef; /* texto normal */
+  --text-dim: #a6a39a; /* texto secundário */
+  --accent: #d97757; /* destaque: ">", botões ativos, progresso */
+
+  /* Cores derivadas (seguem o tema automaticamente) */
+  --cursor: var(--text); /* cursor piscando (o preset "umbreon" usa vermelho) */
+  --error: var(--accent);
+  --ok: var(--text-dim);
+  --backdrop: color-mix(in srgb, var(--bg) 85%, transparent); /* fundo atrás das janelas */
+
+  /* ---------- Fonte do texto ----------
+     Padrão; o menu [config] troca (lista de fontes em js/presets.js).
+     Fontes de pixel só ficam nítidas em tamanhos "exatos":
+     VT323 → múltiplos de 25px | Departure Mono → múltiplos de 11px. */
+  --font-main: 'VT323', monospace; --font-size: 25px;
+
+  --line-height: 28px; /* altura de cada linha de texto */
+
+  /* ---------- Bordas de caixa ----------
+     O VT323 não tem os caracteres ┌─┐│└┘, então as bordas usam a Departure Mono
+     (22px = traço de 2px, nítido). Ela precisa de 28px de altura por linha. */
+  --font-box: 'Departure Mono', monospace;
+  --box-size: 22px;
+  --box-line: 28px;
+
+  /* ---------- Medidas ---------- */
+  --gap: 8px; /* espaço entre painéis */
+  --pad: 10px; /* espaço interno dos painéis */
+  --cover-px: 24; /* resolução da capa pixelada (24×24 "pixels") */
+  --cover-size: 96px; /* tamanho da capa na tela */
+  --cover-colors: 6; /* quantas cores a capa pixelada usa */
+  --touch: 44px; /* altura mínima de botões no celular */
+}

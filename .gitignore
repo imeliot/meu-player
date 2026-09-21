@@ -1,0 +1,21 @@
+# Dependências (se um dia usar npm/Vite)
+node_modules/
+
+# Segredos e configurações locais — nunca vão pro GitHub
+.env
+.env.*
+*.local
+*.pem
+*.key
+
+# Saídas de build
+_site/
+dist/
+
+# Lixo de sistema e editores
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+.vscode/
+.idea/
