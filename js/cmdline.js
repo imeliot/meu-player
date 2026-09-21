@@ -145,6 +145,17 @@ function leave() {
   input().blur();
 }
 
+// Botões rápidos (tela de toque): coloca um texto na linha e mostra as opções.
+export function prefill(text) {
+  const box = input();
+  box.focus();
+  box.value = text;
+  box.dispatchEvent(new Event('input')); // "/" já ativa o filtro
+  if (text.startsWith('/')) return hint('digite pra filtrar a lista · comece com ? pra buscar no spotify');
+  const options = completions(text).map((o) => o.replace(/^:\S+\s+/, ''));
+  hint(options.length ? `opções: ${options.join('  ')} · tab completa` : '');
+}
+
 // ---------- Início ----------
 
 const isTypingSomewhere = (target) =>

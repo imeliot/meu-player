@@ -11,6 +11,8 @@ function friendlyMessage(status, apiMessage) {
   if (status === 403 && /scope/i.test(apiMessage))
     return 'O login atual não tem permissão pra isso. Clique em "Sair" e entre de novo.';
   if (status === 403) return `O Spotify não permitiu essa ação. (${apiMessage})`;
+  if (status === 404 && /device/i.test(apiMessage))
+    return 'nenhum dispositivo ativo. abra o spotify uma vez e volte.';
   if (status === 404) return `Não encontrado. (${apiMessage})`;
   if (status === 429) return 'Muitas requisições seguidas. Espere alguns segundos e tente de novo.';
   return `Erro na API do Spotify (${status}). ${apiMessage}`;
@@ -33,6 +35,8 @@ async function request(method, pathOrUrl, body) {
     const data = await res.json().catch(() => null);
     const err = new Error(friendlyMessage(res.status, data?.error?.message ?? ''));
     err.status = res.status;
+    err.reason = data?.error?.reason; // ex: "NO_ACTIVE_DEVICE", "VOLUME_CONTROL_DISALLOW"
+    err.retryAfter = Number(res.headers.get('Retry-After')) || 0; // segundos (429)
     throw err;
   }
   // 204 = deu certo, mas sem conteúdo (comum nos comandos de playback).
@@ -101,18 +105,54 @@ export const searchTracks = (query, next) =>
 
 // Aleatório ligado/desligado — PUT /me/player/shuffle.
 export const setShuffle = (deviceId, on) =>
-  request('PUT', `/me/player/shuffle?state=${on}&device_id=${encodeURIComponent(deviceId)}`);
+  request('PUT', `/me/player/shuffle?state=${on}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ''}`);
 
 // Repetir — PUT /me/player/repeat. mode: 'off' | 'context' (lista) | 'track' (música).
 export const setRepeat = (deviceId, mode) =>
-  request('PUT', `/me/player/repeat?state=${mode}&device_id=${encodeURIComponent(deviceId)}`);
+  request('PUT', `/me/player/repeat?state=${mode}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ''}`);
+
+// "?device_id=..." (ou nada: aí o Spotify usa o dispositivo ativo).
+const onDevice = (deviceId, sep = '?') =>
+  deviceId ? `${sep}device_id=${encodeURIComponent(deviceId)}` : '';
 
 // Começa a tocar num dispositivo — PUT /me/player/play.
 // Use contextUri (ex: playlist) OU uris (lista de músicas), e offset pra escolher a primeira.
-export function play({ deviceId, contextUri, uris, offset }) {
-  return request('PUT', `/me/player/play?device_id=${encodeURIComponent(deviceId)}`, {
+// Sem nada disso, só continua o que estava pausado.
+export function play({ deviceId, contextUri, uris, offset } = {}) {
+  const body = {
     ...(contextUri && { context_uri: contextUri }),
     ...(uris && { uris }),
     ...(offset && { offset }),
-  });
+  };
+  return request('PUT', `/me/player/play${onDevice(deviceId)}`, Object.keys(body).length ? body : undefined);
 }
+
+// ---------- Controle remoto (Spotify Connect) ----------
+
+// Estado do player em qualquer dispositivo — GET /me/player (null = nada tocando: resposta 204).
+export const getPlaybackState = () => get('/me/player?additional_types=episode');
+
+// Dispositivos disponíveis — GET /me/player/devices.
+export const getDevices = () => get('/me/player/devices');
+
+// Fila — GET /me/player/queue.
+export const getQueue = () => get('/me/player/queue');
+
+// Transfere a reprodução pra outro dispositivo — PUT /me/player (só aceita 1 id).
+export const transferPlayback = (deviceId, playNow) =>
+  request('PUT', '/me/player', { device_ids: [deviceId], play: Boolean(playNow) });
+
+// Pausar — PUT /me/player/pause.
+export const pausePlayback = (deviceId) => request('PUT', `/me/player/pause${onDevice(deviceId)}`);
+
+// Próxima / anterior — POST /me/player/next e /previous.
+export const skipNext = (deviceId) => request('POST', `/me/player/next${onDevice(deviceId)}`);
+export const skipPrevious = (deviceId) => request('POST', `/me/player/previous${onDevice(deviceId)}`);
+
+// Pular pra um ponto da música — PUT /me/player/seek.
+export const seekTo = (ms, deviceId) =>
+  request('PUT', `/me/player/seek?position_ms=${Math.round(ms)}${onDevice(deviceId, '&')}`);
+
+// Volume 0–100 — PUT /me/player/volume.
+export const setVolume = (percent, deviceId) =>
+  request('PUT', `/me/player/volume?volume_percent=${Math.round(percent)}${onDevice(deviceId, '&')}`);

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Meu Player</title>
     <!-- PWA: dá pra instalar como aplicativo (manifest + ícones + cor da barra) -->
     <link rel="manifest" href="manifest.webmanifest" />
@@ -42,10 +42,10 @@
     <div id="library-view" class="app" data-tab="list" hidden>
       <!-- Abas: só aparecem em telas estreitas (celular) -->
       <nav class="tabs" role="tablist" aria-label="Painéis">
-        <button class="tab" role="tab" data-tab="library">[biblioteca]</button>
+        <button class="tab" role="tab" data-tab="library">[bib]</button>
         <button class="tab" role="tab" data-tab="list">[lista]</button>
-        <button class="tab" role="tab" data-tab="now">[tocando]</button>
-        <button class="tab" role="tab" data-tab="config">[config]</button>
+        <button class="tab" role="tab" data-tab="queue">[fila]</button>
+        <button class="tab" role="tab" data-tab="devices">[disp]</button>
       </nav>
 
       <!-- Esquerda: biblioteca -->
@@ -63,6 +63,12 @@
         <ul id="playlists-list" class="list"></ul>
         <button id="playlists-more" class="btn-link" hidden>[carregar mais]</button>
         <button id="playlist-create" class="btn-link">[+ nova playlist]</button>
+        <!-- No computador, fila e dispositivos abrem no lugar da lista (no celular são abas) -->
+        <p class="lib-heading dim">-- player --</p>
+        <div class="tool-row">
+          <button id="queue-open" class="btn-link">[fila]</button>
+          <button id="devices-open" class="btn-link">[dispositivos]</button>
+        </div>
       </section>
 
       <!-- Direita: lista de músicas (curtidas ou da playlist escolhida) -->
@@ -82,6 +88,7 @@
           <span class="col-num">#</span>
           <span class="col-title">título</span>
           <span class="col-artist">artista</span>
+          <span class="col-album">álbum</span>
           <span class="col-time">tempo</span>
           <span class="col-actions"></span>
         </div>
@@ -144,6 +151,27 @@
         </div>
       </section>
 
+      <!-- Fila: o que vem depois (só leitura: o Spotify não deixa pular direto pra um item) -->
+      <section id="panel-queue" class="box panel-queue" data-title="fila" data-panel="queue">
+        <div class="tool-row panel-close-row">
+          <button id="queue-refresh" class="btn-link">[atualizar]</button>
+          <button class="btn-link panel-close">[fechar]</button>
+        </div>
+        <p id="queue-status" class="dim"></p>
+        <ul id="queue-list" class="list"></ul>
+      </section>
+
+      <!-- Dispositivos: aparelhos da conta; tocar num transfere a música pra ele -->
+      <section id="panel-devices" class="box panel-devices" data-title="dispositivos" data-panel="devices">
+        <div class="tool-row panel-close-row">
+          <button id="devices-refresh" class="btn-link">[tentar de novo]</button>
+          <button class="btn-link panel-close">[fechar]</button>
+        </div>
+        <p id="devices-status" class="dim">&gt; procurando dispositivos…</p>
+        <ul id="devices-list" class="list"></ul>
+        <p class="dim devices-tip">&gt; não achou? abra o app do spotify no aparelho e toque em qualquer coisa.</p>
+      </section>
+
       <!-- Embaixo: tocando agora -->
       <section id="panel-now" class="box panel-now" data-title="tocando agora" data-panel="now">
         <div class="now">
@@ -154,6 +182,7 @@
             <p id="pb-status" class="dim">&gt; carregando player…</p>
             <p id="pb-info" class="now-title" hidden>
               <span id="pb-title"></span> <span class="dim">-</span> <span id="pb-artist" class="dim"></span>
+              <span id="pb-device" class="dim pb-device"></span>
             </p>
 
             <!-- Progresso: o texto [===>---] é o desenho; o <input> invisível por cima recebe cliques e teclado -->
@@ -164,14 +193,6 @@
                 <input id="pb-progress" type="range" min="0" max="1" value="0" step="1000" aria-label="Progresso da música" />
               </span>
               <span id="pb-duration" class="dim">0:00</span>
-            </div>
-
-            <div class="now-controls">
-              <button id="pb-shuffle" class="btn-link mode-btn" aria-pressed="false">shuffle:OFF</button>
-              <button id="pb-prev" class="btn-link" aria-label="Anterior">[|&lt;]</button>
-              <button id="pb-toggle" class="btn-link pb-toggle" aria-label="Tocar">[ &gt; ]</button>
-              <button id="pb-next" class="btn-link" aria-label="Próxima">[&gt;|]</button>
-              <button id="pb-repeat" class="btn-link mode-btn" aria-label="Repetir: desligado">repeat:OFF</button>
               <span class="now-volume">
                 <span class="dim">vol</span>
                 <span class="ascii-range ascii-range-fixed">
@@ -179,6 +200,14 @@
                   <input id="pb-volume" type="range" min="0" max="100" value="50" aria-label="Volume" />
                 </span>
               </span>
+            </div>
+
+            <div class="now-controls">
+              <button id="pb-shuffle" class="btn-link mode-btn" aria-pressed="false" aria-label="Aleatório"><span class="lbl-long">shuffle</span><span class="lbl-short">shf</span>:<span class="mode-value">OFF</span></button>
+              <button id="pb-prev" class="btn-link" aria-label="Anterior">[|&lt;]</button>
+              <button id="pb-toggle" class="btn-link pb-toggle" aria-label="Tocar">[ &gt; ]</button>
+              <button id="pb-next" class="btn-link" aria-label="Próxima">[&gt;|]</button>
+              <button id="pb-repeat" class="btn-link mode-btn" aria-label="Repetir: desligado"><span class="lbl-long">repeat</span><span class="lbl-short">rep</span>:<span class="mode-value">OFF</span></button>
             </div>
           </div>
         </div>
@@ -193,8 +222,15 @@
         </p>
         <pre id="cmd-output" class="cmd-output" role="status" hidden></pre>
         <p id="cmd-hint" class="dim cmd-hint" hidden></p>
+        <!-- Comandos rápidos pra tela de toque -->
+        <div class="quick-row">
+          <button class="btn-link quick" data-insert="/">[/busca]</button>
+          <button class="btn-link quick" data-insert=":add ">[:add]</button>
+          <button class="btn-link quick" data-insert=":theme ">[:theme]</button>
+          <button class="btn-link quick" data-tab="devices">[disp]</button>
+        </div>
         <div class="prompt">
-          <label for="cmd-input" class="dim">player@spotify:~$</label>
+          <label for="cmd-input" class="dim"><span class="lbl-long">player@spotify:~$</span><span class="lbl-short">~$</span></label>
           <span class="cmd-field">
             <input
               id="cmd-input"
@@ -243,6 +279,17 @@
           <div class="dialog-actions">
             <button value="cancel" formnovalidate class="btn-link">[cancelar]</button>
             <button value="ok" class="btn-link accent">[salvar]</button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- Menu do toque longo numa música (♥, +, -) -->
+      <dialog id="row-menu" class="dialog">
+        <form method="dialog" class="box" data-title="música">
+          <p id="row-menu-title" class="row-menu-title"></p>
+          <ul id="row-menu-list" class="list"></ul>
+          <div class="dialog-actions">
+            <button value="" class="btn-link">[cancelar]</button>
           </div>
         </form>
       </dialog>

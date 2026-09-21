@@ -9,6 +9,7 @@ const app = {
   addToPlaylist: async () => {}, // (nomeDaPlaylist) → mensagem
   createPlaylist: async () => {}, // (nome) → mensagem
   loadMore: async () => '', // carrega a próxima página da lista aberta → mensagem
+  showPanel: () => {}, // abre um painel/aba: 'devices', 'queue'…
 };
 export function registerApp(functions) {
   Object.assign(app, functions);
@@ -63,6 +64,25 @@ const COMMANDS = {
     run: async (arg) => {
       if (!arg) return fail(`fontes: ${FONTS.map((f) => f.id).join(', ')}`);
       return setFont(arg) ? ok(`fonte: ${arg}`) : fail(`fonte não encontrada: ${arg}`);
+    },
+  },
+  disp: {
+    help: 'dispositivos: mandar a música pra outro aparelho',
+    run: async () => (app.showPanel('devices'), ok('dispositivos')),
+  },
+  fila: { help: 'mostra a fila', run: async () => (app.showPanel('queue'), ok('fila')) },
+  mode: {
+    args: '<remoto|navegador>',
+    help: 'tocar neste navegador ou só controlar outro aparelho',
+    options: () => ['remoto', 'navegador'],
+    run: async (arg) => {
+      const current = player.playerMode() === 'remote' ? 'remoto' : 'navegador';
+      const wanted = fold(arg);
+      if (!wanted) return ok(`modo atual: ${current}. use :mode remoto ou :mode navegador`);
+      if ('remoto'.startsWith(wanted)) player.setPlayerMode('remote'); // recarrega a página
+      else if ('navegador'.startsWith(wanted)) player.setPlayerMode('sdk');
+      else return fail('modos: remoto, navegador');
+      return ok('trocando de modo…');
     },
   },
   help: { help: 'esta ajuda', run: async () => ok(helpText()) },

@@ -10,10 +10,13 @@
 html,
 body {
   margin: 0;
+  /* Sem "puxar pra atualizar" nem o efeito elástico: no app instalado isso recarregava
+     a página. A página não rola; só as listas lá dentro. */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-main), var(--font-box); /* o que faltar no VT323 (ex: ♥) vem da Departure */
-  font-size: var(--font-size);
+  font-size: var(--text-size);
   line-height: var(--line-height);
 
   /* Fonte de pixel: sem negrito/itálico falso e sem suavização onde o navegador deixa
@@ -149,7 +152,7 @@ button:disabled:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-main), var(--font-box);
-  font-size: var(--font-size);
+  font-size: var(--text-size);
   line-height: var(--box-line);
   color: var(--text);
 }
@@ -175,10 +178,20 @@ button:disabled:hover {
   color: var(--border);
 }
 
+/* A página em si nunca rola (só os painéis): nada de recarregar ao arrastar no topo */
+html:has(#library-view:not([hidden])),
+html:has(#library-view:not([hidden])) body {
+  height: 100%;
+  overflow: hidden;
+}
+
 .box-body {
+  /* Rolar a lista até o fim não "passa" o movimento pra página */
+  overscroll-behavior: contain;
   flex: 1;
   min-width: 0;
   min-height: 0;
+  overflow-x: hidden; /* nada rola pro lado: textos longos terminam em "…" */
   overflow-y: auto;
   padding: 0 var(--pad);
 }
@@ -257,13 +270,47 @@ button:disabled:hover {
   grid-area: now;
 }
 
-/* [config] no computador: ocupa o lugar da lista enquanto estiver aberto */
-.panel-config {
+/* [config], fila e dispositivos no computador: ocupam o lugar da lista enquanto abertos */
+.panel-config,
+.panel-queue,
+.panel-devices {
   grid-area: list;
 }
 
 .app:not([data-tab='config']) .panel-config,
-.app[data-tab='config'] .panel-list {
+.app:not([data-tab='queue']) .panel-queue,
+.app:not([data-tab='devices']) .panel-devices,
+.app:is([data-tab='config'], [data-tab='queue'], [data-tab='devices']) .panel-list {
+  display: none;
+}
+
+.panel-close-row {
+  justify-content: flex-end;
+}
+
+.devices-tip {
+  margin-top: var(--line-height);
+}
+
+#devices-list .lib-name {
+  flex: 1 1 auto;
+  min-width: 40%;
+}
+
+#devices-list .dim {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Textos longos/curtos: "shuffle" vira "shf" e o prompt vira "~$" em tela estreita */
+.lbl-short {
+  display: none;
+}
+
+/* Comandos rápidos: só em tela de toque (veja as regras de celular/tablet) */
+.quick-row {
   display: none;
 }
 
@@ -339,17 +386,21 @@ button:disabled:hover {
   column-gap: 2ch;
 }
 
-/* Colunas: # | título | artista | tempo | ações */
+/* Colunas: # | título | artista | álbum | tempo | ações */
+.app {
+  --track-cols: 5ch minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr) 6ch;
+}
+
 .track-head,
 .item {
   display: grid;
-  grid-template-columns: 5ch minmax(0, 3fr) minmax(0, 2fr) 6ch;
+  grid-template-columns: var(--track-cols);
   column-gap: 2ch;
   align-items: baseline;
 }
 
 .track-head {
-  grid-template-columns: 5ch minmax(0, 3fr) minmax(0, 2fr) 6ch 9ch;
+  grid-template-columns: var(--track-cols) 9ch;
   color: var(--text-dim);
   position: sticky;
   top: 0;
@@ -370,9 +421,37 @@ button:disabled:hover {
 }
 
 .col-title,
-.col-artist {
+.col-artist,
+.col-album {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.col-album {
+  color: var(--text-dim);
+}
+
+/* Título rolando (js/roll.js): sem o "…" enquanto anda */
+.rolling {
+  text-overflow: clip !important;
+}
+
+/* Tela média (ou tablet deitado): some a coluna de álbum */
+@media (max-width: 1100px), (pointer: coarse) {
+  .app {
+    --track-cols: 5ch minmax(0, 3fr) minmax(0, 2fr) 6ch;
+  }
+
+  .col-album {
+    display: none;
+  }
+}
+
+/* Toque longo abre o menu da música: sem o menu "copiar/compartilhar" do iPhone */
+.row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .col-num,
@@ -408,6 +487,19 @@ button:disabled:hover {
 }
 
 .heart.liked {
+  color: var(--accent);
+}
+
+/* Menu do toque longo */
+.row-menu-title {
+  margin-bottom: calc(var(--line-height) / 2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-menu-icon {
+  min-width: 2ch;
   color: var(--accent);
 }
 
@@ -626,6 +718,7 @@ button:disabled:hover {
   flex: 1;
   min-width: 16ch;
   font: inherit;
+  font-size: max(16px, var(--text-size));
   line-height: var(--line-height);
   color: var(--text);
   background: var(--bg);
@@ -683,6 +776,7 @@ button:disabled:hover {
 .cmd-input {
   width: 100%;
   font: inherit;
+  font-size: max(16px, var(--text-size)); /* abaixo de 16px o iPhone dá zoom ao tocar */
   line-height: var(--line-height);
   color: var(--text);
   background: transparent;
@@ -717,6 +811,7 @@ button:disabled:hover {
 
 /* Resposta dos comandos (ex: :help); rola se for comprida */
 .cmd-output {
+  overscroll-behavior: contain;
   margin: 0;
   font: inherit;
   line-height: var(--line-height);
@@ -798,6 +893,7 @@ button:disabled:hover {
 .field input,
 .field textarea {
   font: inherit;
+  font-size: max(16px, var(--text-size));
   line-height: var(--line-height);
   color: var(--text);
   background: var(--bg);
@@ -829,20 +925,90 @@ button:disabled:hover {
   overflow-y: auto;
 }
 
-/* ---------- Celular: painéis viram abas ---------- */
+/* ---------- Telas de toque (celular e tablet) e telas estreitas ---------- */
+
+@media (pointer: coarse), (max-width: 760px) {
+  /* Alvos de toque de pelo menos ~44px */
+  .btn,
+  .btn-link,
+  .lib-item,
+  .item,
+  .row-action,
+  .tab {
+    min-height: var(--touch);
+  }
+
+  .lib-item,
+  .btn-link,
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .lib-item {
+    display: flex;
+  }
+
+  .row {
+    align-items: center;
+  }
+
+  .item {
+    align-items: center;
+  }
+
+  /* Arrastar pra reordenar é só com mouse: esconde a alça */
+  .drag-handle {
+    display: none !important;
+  }
+
+  /* Fileira de comandos rápidos acima da linha de comando */
+  .quick-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1ch;
+  }
+
+  .quick {
+    min-width: var(--touch);
+    justify-content: center;
+  }
+}
+
+/* Áreas seguras (notch, barra de gestos): nunca desenhar embaixo delas */
+.app,
+.login {
+  padding-top: max(var(--gap), env(safe-area-inset-top));
+  padding-right: max(var(--gap), env(safe-area-inset-right));
+  padding-bottom: max(var(--gap), env(safe-area-inset-bottom));
+  padding-left: max(var(--gap), env(safe-area-inset-left));
+}
+
+/* ---------- Celular em pé: empilhado ----------
+   [bib] [lista] [fila] [disp]      ← abas
+   painel principal                  ← biblioteca / lista / fila / dispositivos / config
+   tocando agora (compacto)          ← sempre visível
+   comandos rápidos + linha de comando  ← sempre visível */
 
 @media (max-width: 760px) {
   :root {
     --pad: 6px;
   }
 
+  html,
+  body {
+    overscroll-behavior: none; /* sem o "puxa e volta" que atrapalha o layout fixo */
+  }
+
   .app {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       'tabs'
       'main'
+      'now'
       'cmd';
+    gap: calc(var(--gap) / 2);
   }
 
   .tabs {
@@ -854,22 +1020,9 @@ button:disabled:hover {
     scrollbar-width: none;
   }
 
-  /* Linha de comando fácil de tocar */
-  .cmd-input,
-  .prompt label {
-    min-height: var(--touch);
-    display: flex;
-    align-items: center;
-  }
-
-  /* No celular as abas já fecham o [config] */
-  .config-close-row {
-    display: none;
-  }
-
   .tab {
     min-height: var(--touch);
-    padding: 0 2px;
+    padding: 0 1ch;
     color: var(--text-dim);
   }
 
@@ -877,155 +1030,173 @@ button:disabled:hover {
     color: var(--accent);
   }
 
-  /* Todos os painéis no mesmo lugar; só o da aba ativa aparece */
+  /* Todos os painéis principais no mesmo lugar; só o da aba ativa aparece.
+     O "tocando agora" fica sempre embaixo. */
   .panel-library,
   .panel-list,
-  .panel-now {
+  .panel-config,
+  .panel-queue,
+  .panel-devices {
     grid-area: main;
   }
 
-  .panel-config {
-    grid-area: main;
-  }
-
-  .app[data-tab='config'] .box[data-panel]:not([data-panel='config']),
-  .app[data-tab='library'] .box[data-panel]:not([data-panel='library']),
-  .app[data-tab='list'] .box[data-panel]:not([data-panel='list']),
-  .app[data-tab='now'] .box[data-panel]:not([data-panel='now']) {
+  .app .box[data-panel]:not([data-panel='now']) {
     display: none;
   }
 
-  /* Botões grandes o bastante pro dedo */
-  .btn,
-  .btn-link,
-  .lib-item,
-  .item,
-  .row-action,
-  .drag-handle {
-    min-height: var(--touch);
-  }
-
-  .row-actions {
-    gap: 0;
-  }
-
-  .row-action,
-  .drag-handle {
-    min-width: calc(var(--touch) - 8px);
-    justify-content: center;
-  }
-
-  .lib-item,
-  .btn-link,
-  .row-action,
-  .drag-handle {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .lib-item {
+  .app[data-tab='library'] .box.panel-library[data-panel],
+  .app[data-tab='list'] .box.panel-list[data-panel],
+  .app[data-tab='config'] .box.panel-config[data-panel],
+  .app[data-tab='queue'] .box.panel-queue[data-panel],
+  .app[data-tab='devices'] .box.panel-devices[data-panel] {
     display: flex;
   }
 
-  /* Lista: # | título (artista embaixo) | tempo; ações na direita */
-  .track-head {
+  /* No celular as abas já fecham os painéis */
+  .config-close-row,
+  .panel-close {
+    display: none;
+  }
+
+  /* A linha "-- player --" da biblioteca também vira aba */
+  .panel-library .lib-heading:last-of-type,
+  .panel-library .tool-row:last-child {
+    display: none;
+  }
+
+  /* Textos curtos */
+  .lbl-long {
+    display: none;
+  }
+
+  .lbl-short {
+    display: inline;
+  }
+
+  /* ---- Lista: "título · artista" numa linha, tempo à direita; ♥ + no toque longo ---- */
+  .track-head,
+  .row-actions {
     display: none;
   }
 
   .row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 1ch;
-    align-items: center;
-    padding: 4px 0;
+    display: block;
   }
 
   .item {
-    grid-template-columns: 4ch minmax(0, 1fr) 5ch;
-    column-gap: 1ch;
+    display: flex;
+    gap: 1ch;
     align-items: center;
   }
 
   .col-num {
-    grid-row: 1 / 3;
+    flex: 0 0 4ch;
   }
 
+  /* O título ocupa o que precisa; o artista fica com o resto (e some primeiro se faltar espaço) */
   .col-title {
-    grid-column: 2 / 4;
-    grid-row: 1;
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .col-artist {
-    grid-column: 2;
-    grid-row: 2;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .col-artist::before {
+    content: '· ';
   }
 
   .col-time {
-    grid-column: 3;
-    grid-row: 2;
+    flex: 0 0 auto;
   }
 
-  /* Tocando agora ocupa a aba inteira */
+  /* ---- Tocando agora compacto: título / progresso + volume / controles ---- */
+  .panel-now .box-body {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* A capa fica só na linha do título; progresso e controles usam a largura toda */
   .now {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    column-gap: 1ch;
     align-items: center;
-  }
-
-  .pb-cover {
-    width: calc(var(--cover-size) * 2);
-    height: calc(var(--cover-size) * 2);
+    padding: 0;
   }
 
   .now-main {
-    width: 100%;
+    display: contents;
   }
 
-  /* Controles em linhas: [|<] [||] [>|] / shuffle repeat / volume */
+  /* Capa pequena (24 px = 1 pixel da capa por pixel da tela) */
+  .pb-cover {
+    grid-column: 1;
+    grid-row: 1;
+    width: 24px;
+    height: 24px;
+  }
+
+  #pb-status,
+  #pb-info {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .now-progress,
   .now-controls {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    justify-items: center;
-    row-gap: 4px;
-  }
-
-  #pb-prev,
-  #pb-toggle,
-  #pb-next {
-    grid-column: span 2;
-  }
-
-  #pb-prev {
-    order: 1;
-  }
-
-  #pb-toggle {
-    order: 2;
-  }
-
-  #pb-next {
-    order: 3;
-  }
-
-  #pb-shuffle,
-  #pb-repeat {
-    order: 4;
-    grid-column: span 3;
-  }
-
-  .now-volume {
-    order: 5;
     grid-column: 1 / -1;
-    width: 100%;
   }
 
-  .now-volume .ascii-range-fixed {
-    flex: 1;
+  .now-progress {
+    min-height: var(--touch);
   }
-}
 
-/* Em telas de toque, arrastar não funciona (o arrastar do navegador é só de mouse):
-   esconde a alça pra sobrar espaço pro título. */
-@media (pointer: coarse) {
-  .drag-handle {
-    display: none !important;
+  .now-progress .ascii-range {
+    height: var(--touch);
+    min-width: 6ch;
+  }
+
+  .now-progress .ascii-bar {
+    line-height: var(--touch);
+  }
+
+  .now-volume > .dim {
+    display: none; /* sem a palavra "vol": só a barra [###--] */
+  }
+
+  .ascii-range-fixed {
+    width: 7ch;
+  }
+
+  /* Cabe numa linha com VT323; com fonte mais larga, quebra em duas em vez de amassar */
+  .now-controls {
+    justify-content: space-between;
+    column-gap: 0;
+    flex-wrap: wrap;
+  }
+
+  .now-controls .btn-link {
+    min-height: var(--touch);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .pb-device {
+    display: none; /* o nome do aparelho aparece na aba [disp] */
+  }
+
+  /* ---- Linha de comando ---- */
+  .cmd-input,
+  .prompt label {
+    min-height: var(--touch);
+    display: flex;
+    align-items: center;
+  }
+
+  .cmd-output {
+    max-height: calc(var(--line-height) * 4);
   }
 }

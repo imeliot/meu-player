@@ -6,7 +6,9 @@ import { login, logout, isLoggedIn, hasAllScopes } from './auth.js';
 import { APP_ROOT } from './config.js';
 import * as api from './api.js';
 import { initPlayer, playHere, currentTrack } from './player.js';
-import { initCmdline, hint } from './cmdline.js';
+import { initCmdline, hint, prefill } from './cmdline.js';
+import { initDevices, setDevicesShown } from './devices.js';
+import { initRoll } from './roll.js';
 import { registerApp, fold } from './commands.js';
 import { startBoot } from './boot.js';
 import { isThemePlaylist, syncFromPlaylists } from './themes.js';
@@ -109,11 +111,17 @@ function trackRow(track, number, onPlay, extra = []) {
   const btn = el('button', 'item');
   btn.type = 'button';
   btn.dataset.uri = track.uri;
+  // Texto completo como dica (pra quem desliga animações e o título não rola).
+  btn.title = [track.name, track.artists?.map((a) => a.name).join(', '), track.album?.name]
+    .filter(Boolean)
+    .join(' · ');
   if (playingUris.includes(track.uri)) btn.classList.add('playing');
   btn.addEventListener('click', () => {
+    if (li.dataset.longPressed) return void delete li.dataset.longPressed; // foi toque longo
     selectTrack(null); // clicou = tocou; a "selecionada" passa a ser a que toca
     onPlay();
   });
+  attachLongPress(li, track.name);
   // Chegou pelo teclado (Tab/setas): vira a música selecionada (pro :add).
   btn.addEventListener('focus', () => {
     if (usingKeyboard) selectTrack(li, track);
@@ -123,6 +131,7 @@ function trackRow(track, number, onPlay, extra = []) {
     el('span', 'col-num', String(number)),
     el('span', 'col-title', track.name),
     el('span', 'col-artist', track.artists?.map((a) => a.name).join(', ') ?? ''),
+    el('span', 'col-album', track.album?.name ?? ''),
     el('span', 'col-time', formatDuration(track.duration_ms)),
   );
 
@@ -167,6 +176,65 @@ function focusRow(li) {
   if (!li) return;
   li.querySelector('.item')?.focus();
   selectTrack(li, trackOfRow.get(li));
+}
+
+// ---------- Toque longo (celular): menu com ♥, + e - ----------
+
+// Segurar o dedo ~0,5s numa música (ou clique direito no PC) abre o menu de ações.
+function attachLongPress(li, title) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  li.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    startX = e.clientX;
+    startY = e.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      li.dataset.longPressed = '1';
+      openRowMenu(li, title);
+    }, 500);
+  });
+  // Arrastou o dedo (rolando a lista): não é toque longo.
+  li.addEventListener('pointermove', (e) => {
+    if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel();
+  });
+  li.addEventListener('pointerup', cancel);
+  li.addEventListener('pointercancel', cancel);
+  li.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    cancel();
+    openRowMenu(li, title);
+  });
+}
+
+// O menu reaproveita os botões da própria linha (♥, +, -), que ficam escondidos no celular.
+function openRowMenu(li, title) {
+  const menu = $('#row-menu');
+  if (menu.open) return;
+  const actions = [...li.querySelectorAll('.row-actions .row-action')];
+  if (!actions.length) return;
+  $('#row-menu-title').textContent = title;
+  $('#row-menu-list').replaceChildren(
+    ...actions.map((action) => {
+      const item = el('button', 'lib-item');
+      item.type = 'button';
+      item.classList.toggle('selected', action.classList.contains('liked'));
+      item.append(el('span', 'row-menu-icon', action.textContent), el('span', 'lib-name', action.getAttribute('aria-label')));
+      item.addEventListener('click', () => {
+        menu.close();
+        action.click();
+      });
+      const row = el('li');
+      row.append(item);
+      return row;
+    }),
+  );
+  menu.showModal();
 }
 
 function selectTrack(li, track) {
@@ -285,7 +353,7 @@ function renderPlaylists() {
       const btn = el('button', 'lib-item');
       btn.type = 'button';
       btn.classList.toggle('selected', openPlaylist?.id === p.id);
-      btn.title = `de ${p.owner?.display_name ?? 'desconhecido'}`;
+      btn.title = `${p.name} · de ${p.owner?.display_name ?? 'desconhecido'}`;
       btn.append(el('span', 'lib-name', p.name), el('span', 'dim', String(trackCount(p))));
       btn.addEventListener('click', () => safely(() => openPlaylistView(p)));
       li.append(btn);
@@ -721,6 +789,41 @@ function showTab(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.setAttribute('aria-selected', String(tab.dataset.tab === name));
   }
+  setDevicesShown(name === 'devices'); // só consulta dispositivos com o painel aberto
+  if (name === 'queue') safely(refreshQueue);
+}
+
+// ---------- Fila ----------
+
+let queueTrackUri = null; // música tocando quando a fila foi lida
+
+async function refreshQueue() {
+  $('#queue-status').textContent = '> lendo a fila…';
+  const data = await api.getQueue();
+  const current = data?.currently_playing;
+  const items = (data?.queue ?? []).filter(Boolean);
+  queueTrackUri = current?.uri ?? null;
+  $('#queue-status').textContent = current
+    ? `> tocando: ${current.name} · ${items.length} na fila`
+    : '> nada tocando. a fila aparece quando algo estiver tocando.';
+  $('#queue-list').replaceChildren(
+    ...items.map((track, i) =>
+      trackRow(track, i + 1, () =>
+        showNotice('a fila é só pra consulta: o spotify não deixa pular direto pra um item. use :next.'),
+      ),
+    ),
+  );
+  checkLiked(items).catch((err) => console.error(err));
+}
+
+// Música mudou com a fila aberta: lê de novo (só quando muda, não a cada atualização).
+function onTrackChange(...uris) {
+  highlightPlaying(...uris);
+  const now = uris[1] ?? uris[0] ?? null;
+  if ($('#library-view').dataset.tab === 'queue' && now && now !== queueTrackUri) {
+    queueTrackUri = now;
+    safely(refreshQueue);
+  }
 }
 
 // ---------- Telas ----------
@@ -744,8 +847,10 @@ async function showLibrary() {
   initPlayer({
     onError: (msg) => showNotice(msg),
     onAuthError: sessionExpired,
-    onTrackChange: highlightPlaying,
+    onTrackChange,
+    onNoDevice: () => showTab('devices'), // sem dispositivo ativo: mostra a lista
   });
+  initDevices(safely);
 
   initConfig(safely);
   initCmdline({
@@ -764,6 +869,7 @@ async function showLibrary() {
   });
   registerApp({
     loadMore,
+    showPanel: showTab,
     playlistNames: () => playlists.filter(canEditItems).map((p) => p.name),
     addToPlaylist: async (name) => {
       const target = findPlaylistByName(name);
@@ -842,6 +948,18 @@ $('#liked-entry').addEventListener('click', () => {
   showTab('list');
 });
 $('#config-open').addEventListener('click', () => showTab('config'));
+$('#queue-open').addEventListener('click', () => showTab('queue'));
+$('#devices-open').addEventListener('click', () => showTab('devices'));
+$('#queue-refresh').addEventListener('click', () => safely(refreshQueue));
+for (const btn of document.querySelectorAll('.panel-close')) {
+  btn.addEventListener('click', () => showTab('list'));
+}
+// Comandos rápidos (tela de toque): preenchem a linha de comando ou abrem um painel.
+for (const btn of document.querySelectorAll('.quick')) {
+  btn.addEventListener('click', () =>
+    btn.dataset.tab ? showTab(btn.dataset.tab) : prefill(btn.dataset.insert),
+  );
+}
 $('#config-close').addEventListener('click', () => showTab('list'));
 for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => showTab(tab.dataset.tab));
@@ -865,6 +983,7 @@ if ('serviceWorker' in navigator) {
 }
 
 decorateBoxes(); // desenha as bordas ┌─┐ em todos os painéis
+initRoll(); // títulos compridos andam de lado pra dar pra ler
 showTab('list');
 
 if (!isLoggedIn()) {

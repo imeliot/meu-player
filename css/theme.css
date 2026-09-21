@@ -42,6 +42,11 @@
      VT323 → múltiplos de 25px | Departure Mono → múltiplos de 11px. */
   --font-main: 'VT323', monospace; --font-size: 25px;
 
+  /* Escala do app: 1 no computador; no celular fica menor (veja o fim deste arquivo).
+     O tamanho real do texto = tamanho da fonte × escala. */
+  --ui-scale: 1;
+  --text-size: calc(var(--font-size) * var(--ui-scale));
+
   --line-height: 28px; /* altura de cada linha de texto */
 
   /* ---------- Bordas de caixa ----------
@@ -58,4 +63,18 @@
   --cover-size: 96px; /* tamanho da capa na tela */
   --cover-colors: 6; /* quantas cores a capa pixelada usa */
   --touch: 44px; /* altura mínima de botões no celular */
+}
+
+/* ---------- Celular: tudo ~80% menor ----------
+   As bordas continuam encaixando: Departure Mono a 16,5px precisa de 21px por linha
+   (mesma proporção de 22px → 28px). */
+@media (max-width: 760px) {
+  :root {
+    --ui-scale: 0.8;
+    --line-height: 24px;
+    --box-size: 16.5px;
+    --box-line: 21px;
+    --gap: 6px;
+    --touch: 40px; /* alvo de toque um pouco menor, ainda confortável pro dedo */
+  }
 }

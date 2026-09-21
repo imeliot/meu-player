@@ -36,10 +36,12 @@ arquivos do app, nunca dados do Spotify, e fica desligado no `127.0.0.1`.
 - `js/config.js` — Client ID, Redirect URI e permissões (scopes)
 - `js/auth.js` — login PKCE e renovação do token
 - `js/api.js` — chamadas à Web API
-- `js/player.js` — player no navegador (Web Playback SDK) e barra de baixo
+- `js/player.js` — player: toca no navegador (Web Playback SDK) ou controla outro aparelho (Web API, modo remoto)
+- `js/devices.js` — painel de dispositivos (transferir a música)
 - `js/ui.js` — peças de interface (bordas ┌─┐, avisos, janelas)
 - `js/boot.js` — tela de boot
 - `js/cover.js` — capa do álbum pixelada
+- `js/roll.js` — títulos compridos andam de lado (letreiro) pra dar pra ler
 - `js/themes.js` — aplica temas, guarda no navegador e sincroniza com a conta (playlists "⚙ tema:")
 - `js/settings.js` — painel [config] (temas e fontes)
 - `js/cmdline.js` — linha de comando (atalhos `/` e `:`, histórico, Tab, filtro e busca)

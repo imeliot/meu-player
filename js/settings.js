@@ -67,7 +67,7 @@ function renderFontList() {
       // O nome da fonte aparece escrito nela mesma.
       const name = el('span', 'lib-name', `${f.label}  áçõ 0123 [==>--]`);
       name.style.fontFamily = `${f.family}, monospace`;
-      name.style.fontSize = f.size;
+      name.style.fontSize = `calc(${f.size} * var(--ui-scale))`; // menor no celular, como o resto
       btn.append(name);
       withPreview(btn, () => themes.previewFont(f.id));
       btn.addEventListener('click', () => {
