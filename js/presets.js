@@ -69,7 +69,19 @@ export const PRESET_THEMES = [
     cursor: '#fe8019',
   },
   {
-    name: 'wallpaper', // cores tiradas do papel de parede (buraco negro + campo dourado)
+    name: 'cidade', // papel de parede atual: rua molhada azul + lanternas do carro
+    colors: {
+      bg: '#03132b',
+      panel: '#0b2138',
+      border: '#1d456b',
+      text: '#cfe1f2',
+      textDim: '#7d9bb8',
+      accent: '#e8776b',
+    },
+    cursor: '#e8776b',
+  },
+  {
+    name: 'wallpaper', // outro papel de parede (buraco negro + campo dourado)
     colors: {
       bg: '#19120c',
       panel: '#261e18',

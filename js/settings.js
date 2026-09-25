@@ -69,6 +69,13 @@ function renderFontList() {
       name.style.fontFamily = `${f.family}, monospace`;
       name.style.fontSize = `calc(${f.size} * var(--ui-scale))`; // menor no celular, como o resto
       btn.append(name);
+      // Aviso honesto: se o aparelho não conseguir carregar a fonte, ela não muda nada.
+      const mark = el('span', 'dim', '');
+      btn.append(mark);
+      document.fonts?.ready.then(() => {
+        if (!fontAvailable(f.family)) mark.textContent = '(não carregou aqui)';
+        checkFontsBlocked();
+      });
       withPreview(btn, () => themes.previewFont(f.id));
       btn.addEventListener('click', () => {
         themes.setFont(f.id);
@@ -79,6 +86,31 @@ function renderFontList() {
       return li;
     }),
   );
+}
+
+// A fonte está mesmo valendo? Mede um texto nela e numa fonte que não existe: se der a
+// mesma largura, ela não carregou. (document.fonts.check responde "true" mesmo quando o
+// navegador está com as fontes da web desligadas, então não dá pra confiar nele.)
+const measurer = document.createElement('canvas').getContext('2d');
+
+function fontAvailable(family) {
+  const text = 'mmmmiiii0123áçõ[==>--]';
+  measurer.font = "20px 'fonte-que-nao-existe-zzz'";
+  const fallback = measurer.measureText(text).width;
+  measurer.font = `20px ${family}, 'fonte-que-nao-existe-zzz'`;
+  return Math.abs(measurer.measureText(text).width - fallback) > 0.5;
+}
+
+// Nenhuma fonte carregou? O navegador está bloqueando fontes da web: aí trocar de fonte
+// só muda o tamanho, porque tudo cai na fonte do sistema.
+function checkFontsBlocked() {
+  const none = themes.FONTS.every((f) => !fontAvailable(f.family));
+  const warning = $('#font-warning');
+  warning.hidden = !none;
+  warning.textContent = none
+    ? '! este navegador está bloqueando fontes da web: trocar de fonte só muda o tamanho. ' +
+      'procure nas configurações dele a opção de permitir que as páginas usem as próprias fontes.'
+    : '';
 }
 
 // ---------- Editor de cores ----------
