@@ -11,6 +11,7 @@ const app = {
   loadMore: async () => '', // carrega a próxima página da lista aberta → mensagem
   showPanel: () => {}, // abre um painel/aba: 'devices', 'queue'…
   showAlbums: async () => {}, // abre a lista de álbuns salvos
+  searchLibrary: () => '', // procura no índice das suas playlists → mensagem
 };
 export function registerApp(functions) {
   Object.assign(app, functions);
@@ -72,6 +73,11 @@ const COMMANDS = {
     run: async () => (app.showPanel('devices'), ok('dispositivos')),
   },
   fila: { help: 'mostra a fila', run: async () => (app.showPanel('queue'), ok('fila')) },
+  tudo: {
+    args: '<texto>',
+    help: 'procura em todas as suas playlists (o mesmo que "?texto tudo")',
+    run: async (arg) => (arg ? ok(app.searchLibrary(arg)) : fail('uso: :tudo <texto>')),
+  },
   alb: {
     help: 'álbuns salvos na sua conta (a busca "?texto" também mostra álbuns)',
     run: async () => (await app.showAlbums(), ok('álbuns salvos')),

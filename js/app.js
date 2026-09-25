@@ -13,6 +13,7 @@ import { registerApp, fold } from './commands.js';
 import { startBoot } from './boot.js';
 import { isThemePlaylist, syncFromPlaylists } from './themes.js';
 import * as pins from './pins.js';
+import * as library from './library.js';
 import { loadCache, saveCache, dropCache, debounce } from './cache.js';
 import { initConfig, setSyncStatus, closeConfig } from './settings.js';
 import {
@@ -525,6 +526,91 @@ function findPlaylistByName(name) {
   throw new Error(`mais de uma playlist combina: ${found.map((p) => p.name).join(', ')} (use tab)`);
 }
 
+// ---------- Busca na biblioteca inteira ----------
+
+let indexResults = []; // resultados da última busca no índice
+
+const when = (ms) =>
+  new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+function renderIndexStatus(message) {
+  const info = library.info();
+  $('#index-count').textContent = info ? info.tracks : '';
+  $('#index-build').textContent = info ? '[atualizar índice]' : '[montar índice]';
+  if (message) return void ($('#index-status').textContent = message);
+  $('#index-status').textContent = info
+    ? `> ${info.tracks} músicas de ${info.playlists} playlists · atualizado em ${when(info.at)}` +
+      ' · busque com "?texto tudo"'
+    : '> índice ainda não montado. o app vai ler suas playlists uma vez (uns 4 minutos)' +
+      ' e depois a busca é instantânea, aqui mesmo no aparelho.';
+}
+
+function showIndexView() {
+  showView('index');
+  setBoxTitle($('#panel-list'), 'busca na biblioteca');
+  renderIndexStatus();
+  showTab('list');
+}
+
+// Lê as playlists uma a uma, devagar. Dá pra parar no meio: o que leu fica guardado.
+async function buildLibraryIndex() {
+  await loadAllPlaylists(); // precisa da lista completa, não só da primeira página
+  $('#index-stop').hidden = false;
+  $('#index-build').disabled = true;
+  try {
+    const result = await library.buildIndex(playlists, ({ done, total, name, read, skipped }) => {
+      renderIndexStatus(
+        `> lendo ${done + 1} de ${total}: ${name} (${read} lidas, ${skipped} sem mudança)` +
+          ' · dá pra parar quando quiser',
+      );
+    });
+    renderIndexStatus();
+    showNotice(
+      result.stopped
+        ? `índice parado: ${result.read} playlists lidas. dá pra continuar depois.`
+        : `índice pronto: ${result.read} lidas, ${result.skipped} sem mudança.`,
+      'success',
+    );
+  } finally {
+    $('#index-stop').hidden = true;
+    $('#index-build').disabled = false;
+  }
+}
+
+// "?texto tudo" → procura no índice em vez de perguntar ao Spotify.
+function searchLibrary(text) {
+  const results = library.searchIndex(text);
+  if (!results) {
+    showIndexView();
+    return 'monte o índice primeiro (botão aí em cima).';
+  }
+  indexResults = results;
+  filterText = '';
+  showIndexView();
+  renderIndexResults(text);
+  return results.length
+    ? `${results.length} música(s) suas com "${text}". a coluna "playlists" mostra onde cada uma está.`
+    : `nenhuma música sua combina com "${text}".`;
+}
+
+function renderIndexResults(text) {
+  // As músicas do índice são enxutas: montamos o formato que a lista espera, usando a
+  // coluna do álbum pra mostrar em quais playlists a música está.
+  const tracks = indexResults.map(({ track, lists }) => ({
+    uri: track.uri,
+    name: track.name,
+    artists: [{ name: track.artists }],
+    album: { name: lists.join(' · ') },
+    duration_ms: 0,
+  }));
+  $('#index-list').replaceChildren(
+    ...tracks.map((track, i) => trackRow(track, i + 1, () => safely(() => playFromList(tracks, track)))),
+  );
+  setBoxTitle($('#panel-list'), `biblioteca: ${text}`);
+  applyFilter();
+  checkLiked(tracks).catch((err) => console.error(err));
+}
+
 // ---------- Playlists fixadas ----------
 
 const isPinned = (playlist) => pins.isPinned(playlist.id);
@@ -766,6 +852,11 @@ function showView(view) {
   $('#playlist-detail').hidden = view !== 'playlist';
   $('#search-view').hidden = view !== 'search';
   $('#albums-view').hidden = view !== 'albums';
+  $('#index-view').hidden = view !== 'index';
+  $('#index-detail').hidden = view !== 'index';
+  $('#index-entry').classList.toggle('selected', view === 'index');
+  // Na busca da biblioteca, a coluna do álbum mostra em quais playlists a música está.
+  $('.track-head .col-album').textContent = view === 'index' ? 'playlists' : 'álbum';
   $('#album-view').hidden = view !== 'album';
   $('#album-detail').hidden = view !== 'album';
   $('#liked-entry').classList.toggle('selected', view === 'liked');
@@ -780,6 +871,7 @@ const LIST_OF_VIEW = {
   search: '#search-list',
   albums: '#albums-list',
   album: '#album-items',
+  index: '#index-list',
 };
 
 // Filtro "/texto": esconde as linhas que não combinam (só na lista aberta, sem chamar a API).
@@ -836,6 +928,7 @@ const MORE = {
     load: async () => addSavedAlbumsPage(await api.getSavedAlbums(nextPage.albums)),
   },
   album: { next: () => null, load: async () => {} }, // o álbum já vem inteiro
+  index: { next: () => null, load: async () => {} }, // a busca no índice já vem inteira
 };
 
 let loadingMore = false; // evita buscar a mesma página duas vezes (↓ segurado)
@@ -860,6 +953,10 @@ async function loadMore() {
 // ---------- Busca "?texto" ----------
 
 async function runSearch(query) {
+  // "?radiohead tudo" procura nas suas playlists (no índice), não no catálogo.
+  const mine = query.match(/^(.+?)\s+tudo$/i);
+  if (mine) return searchLibrary(mine[1]);
+
   const page = await api.searchTracksAndAlbums(query);
   searchResults = [];
   searchAlbums = (page.albums?.items ?? []).filter(Boolean);
@@ -1247,6 +1344,7 @@ async function showLibrary() {
     loadMore,
     showPanel: showTab,
     showAlbums: () => safely(showSavedAlbums),
+    searchLibrary,
     playlistNames: () => playlists.filter(canEditItems).map((p) => p.name),
     addToPlaylist: async (name) => {
       const target = findPlaylistByName(name);
@@ -1266,6 +1364,7 @@ async function showLibrary() {
 
   // Primeiro a cópia guardada neste aparelho: o app aparece pronto na hora, mesmo sem
   // internet, e volta na aba e na playlist de quando você fechou.
+  library.loadIndex().then(() => renderIndexStatus()); // índice da busca "?texto tudo"
   const fromCache = applyLibrarySnapshot((await loadCache(CACHE_LIBRARY))?.data);
   if (fromCache) await restoreUi((await loadCache(CACHE_UI))?.data);
 
@@ -1345,6 +1444,9 @@ $('#liked-entry').addEventListener('click', () => {
   showTab('list');
 });
 $('#albums-entry').addEventListener('click', () => safely(showSavedAlbums));
+$('#index-entry').addEventListener('click', () => showIndexView());
+$('#index-build').addEventListener('click', () => safely(buildLibraryIndex));
+$('#index-stop').addEventListener('click', () => library.stopBuilding());
 $('#albums-more').addEventListener('click', () => safely(loadMore));
 $('#album-play').addEventListener('click', () => safely(() => playInAlbum(null)));
 $('#album-save').addEventListener('click', () => safely(() => toggleAlbumSaved(openAlbum)));

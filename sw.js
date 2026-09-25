@@ -29,6 +29,7 @@ const SHELL = [
   'js/config.js',
   'js/cover.js',
   'js/devices.js',
+  'js/library.js',
   'js/pins.js',
   'js/player.js',
   'js/presets.js',

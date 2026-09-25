@@ -63,6 +63,10 @@
           <span class="lib-name">álbuns salvos</span>
           <span id="albums-count" class="dim"></span>
         </button>
+        <button id="index-entry" class="lib-item" type="button">
+          <span class="lib-name">busca na biblioteca</span>
+          <span id="index-count" class="dim"></span>
+        </button>
         <p class="lib-heading dim">-- playlists (<span id="playlists-count">0</span>) --</p>
         <ul id="playlists-list" class="list"></ul>
         <button id="playlists-more" class="btn-link" hidden>[carregar mais]</button>
@@ -87,6 +91,15 @@
           </div>
           <p id="playlist-description" class="dim" hidden></p>
           <p id="playlist-note" class="dim" hidden></p>
+        </div>
+
+        <!-- Índice da biblioteca (busca em todas as playlists de uma vez) -->
+        <div id="index-detail" class="list-tools" hidden>
+          <div class="tool-row">
+            <button id="index-build" class="btn-link">[montar índice]</button>
+            <button id="index-stop" class="btn-link danger" hidden>[parar]</button>
+          </div>
+          <p id="index-status" class="dim"></p>
         </div>
 
         <!-- Ferramentas do álbum aberto -->
@@ -133,6 +146,11 @@
           <p id="albums-status" class="dim"></p>
           <ul id="albums-list" class="list"></ul>
           <button id="albums-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+
+        <!-- Resultados da busca na biblioteca inteira -->
+        <div id="index-view" hidden>
+          <ul id="index-list" class="list"></ul>
         </div>
 
         <!-- Um álbum aberto, com as músicas dele -->
