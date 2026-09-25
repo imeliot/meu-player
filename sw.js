@@ -23,6 +23,7 @@ const SHELL = [
   'js/app.js',
   'js/auth.js',
   'js/boot.js',
+  'js/cache.js',
   'js/cmdline.js',
   'js/commands.js',
   'js/config.js',

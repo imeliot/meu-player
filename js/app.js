@@ -12,6 +12,7 @@ import { initRoll } from './roll.js';
 import { registerApp, fold } from './commands.js';
 import { startBoot } from './boot.js';
 import { isThemePlaylist, syncFromPlaylists } from './themes.js';
+import { loadCache, saveCache, dropCache, debounce } from './cache.js';
 import { initConfig, setSyncStatus, closeConfig } from './settings.js';
 import {
   $,
@@ -64,6 +65,87 @@ let usingKeyboard = false;
 document.addEventListener('keydown', () => (usingKeyboard = true), true);
 document.addEventListener('pointerdown', () => (usingKeyboard = false), true);
 
+// ---------- Cache local (abrir rápido e voltar de onde parou) ----------
+
+const CACHE_LIBRARY = 'library'; // curtidas e playlists já carregadas
+const CACHE_UI = 'ui'; // aba e playlist abertas da última vez
+
+// Junta o estado atual num objeto simples pra guardar.
+const librarySnapshot = () => ({
+  me,
+  liked: { items: likedTracks, total: likedTotal, next: nextPage.tracks },
+  playlists: {
+    items: playlists,
+    themes: themePlaylists,
+    total: playlistsTotal,
+    next: nextPage.playlists,
+  },
+});
+
+// Salva no máximo uma vez a cada 2s (as listas mudam várias vezes seguidas).
+const saveLibrarySoon = debounce(() => me && saveCache(CACHE_LIBRARY, librarySnapshot()), 2000);
+
+// As músicas de cada playlist ficam numa chave só dela.
+const itemsKey = (id) => `items:${id}`;
+
+const saveItemsSoon = debounce(() => {
+  if (!openPlaylist || !playlistEntries.length) return;
+  saveCache(itemsKey(openPlaylist.id), {
+    snapshot_id: openPlaylist.snapshot_id,
+    entries: playlistEntries,
+    next: nextPage.playlistItems,
+  });
+}, 2000);
+
+const saveUiSoon = debounce(
+  () =>
+    saveCache(CACHE_UI, {
+      tab: $('#library-view').dataset.tab,
+      view: currentView,
+      playlistId: openPlaylist?.id ?? null,
+    }),
+  800,
+);
+
+// Põe na tela a biblioteca guardada. Devolve false se não havia nada salvo.
+function applyLibrarySnapshot(data) {
+  if (!data?.me) return false;
+  me = data.me;
+  $('#user-name').textContent = me.display_name ?? me.id;
+  likedTracks = data.liked.items;
+  likedTotal = data.liked.total;
+  nextPage.tracks = data.liked.next;
+  for (const track of likedTracks) likedStatus.set(track.uri, true);
+  playlists = data.playlists.items;
+  playlistsTotal = data.playlists.total;
+  nextPage.playlists = data.playlists.next;
+  themePlaylists.length = 0;
+  themePlaylists.push(...data.playlists.themes);
+  renderLiked();
+  renderPlaylists();
+  return true;
+}
+
+// Antes de aplicar as listas novas do Spotify, esvazia as do cache (senão duplicaria).
+function resetLibraryState() {
+  likedTracks = [];
+  likedTotal = 0;
+  playlists = [];
+  playlistsTotal = 0;
+  themePlaylists.length = 0;
+  nextPage.tracks = null;
+  nextPage.playlists = null;
+}
+
+// Volta pra aba e pra playlist de quando o app foi fechado.
+async function restoreUi(ui) {
+  if (!ui) return;
+  const playlist = ui.playlistId && playlists.find((p) => p.id === ui.playlistId);
+  if (playlist) await safely(() => openPlaylistView(playlist));
+  // O painel [config] não é um bom lugar pra reabrir o app.
+  if (ui.tab && ui.tab !== 'config') showTab(ui.tab);
+}
+
 // ---------- Ajudantes ----------
 
 // Roda uma ação mostrando erros na tela em vez de quebrar em silêncio.
@@ -77,8 +159,14 @@ async function safely(fn) {
   }
 }
 
-function sessionExpired() {
+// Sair da conta apaga também a cópia local da biblioteca (é de quem estava logado).
+async function forgetEverything() {
   logout();
+  await Promise.all([dropCache(CACHE_LIBRARY), dropCache(CACHE_UI)]);
+}
+
+async function sessionExpired() {
+  await forgetEverything();
   location.replace(`${APP_ROOT}?expirou=1`);
 }
 
@@ -278,6 +366,7 @@ function renderLiked() {
   $('#tracks-count').textContent = likedTotal;
   $('#tracks-more').hidden = !nextPage.tracks;
   applyFilter();
+  saveLibrarySoon();
 }
 
 function addLikedPage(page) {
@@ -362,6 +451,7 @@ function renderPlaylists() {
   );
   $('#playlists-count').textContent = playlistsTotal;
   $('#playlists-more').hidden = !nextPage.playlists;
+  saveLibrarySoon();
 }
 
 function addPlaylistsPage(page) {
@@ -433,6 +523,7 @@ function showView(view) {
   $('#search-view').hidden = view !== 'search';
   $('#liked-entry').classList.toggle('selected', view === 'liked');
   applyFilter();
+  saveUiSoon();
 }
 
 const LIST_OF_VIEW = { liked: '#tracks-list', playlist: '#playlist-items', search: '#search-list' };
@@ -571,10 +662,25 @@ async function openPlaylistView(playlist) {
   renderPlaylists(); // marca a playlist escolhida com ">"
   showTab('list'); // no celular, pula pra aba da lista
 
+  // Músicas guardadas deste aparelho: aparecem na hora (e servem offline).
+  const saved = (await loadCache(itemsKey(playlist.id)))?.data;
+  if (openPlaylist !== playlist) return; // já saiu daqui enquanto lia o cache
+  if (saved?.entries?.length) {
+    playlistEntries = saved.entries;
+    nextPage.playlistItems = saved.next ?? null;
+    renderPlaylistItems();
+    // O Spotify muda o "snapshot_id" a cada alteração. Igual e completa = nem pergunta.
+    if (saved.snapshot_id === playlist.snapshot_id && saved.entries.length >= trackCount(playlist)) {
+      return;
+    }
+  }
+
   let page;
   try {
     page = await api.getPlaylistItems(playlist.id);
   } catch (err) {
+    // Sem internet, mas com cópia guardada: fica com ela em vez de mostrar erro.
+    if (!err.status && playlistEntries.length) return console.error(err);
     // 403: o Spotify só mostra as músicas de playlists suas ou colaborativas.
     if (err.status !== 403) throw err;
     $('#playlist-note').textContent =
@@ -584,7 +690,9 @@ async function openPlaylistView(playlist) {
     return;
   }
   // Só mostra se o usuário ainda está nesta playlist (pode ter voltado ou aberto outra).
-  if (openPlaylist === playlist) await addPlaylistItemsPage(page);
+  if (openPlaylist !== playlist) return;
+  playlistEntries = []; // troca a cópia guardada pela lista nova
+  await addPlaylistItemsPage(page);
 }
 
 // Mostra as músicas curtidas no painel da direita (é o "fechar playlist").
@@ -624,6 +732,7 @@ async function reloadPlaylistItems() {
 
 function renderPlaylistItems() {
   const editable = canEditItems(openPlaylist);
+  saveItemsSoon();
   $('#playlist-items').replaceChildren(
     ...playlistEntries.map((entry) => {
       const extra = editable
@@ -791,6 +900,7 @@ function showTab(name) {
   }
   setDevicesShown(name === 'devices'); // só consulta dispositivos com o painel aberto
   if (name === 'queue') safely(refreshQueue);
+  saveUiSoon();
 }
 
 // ---------- Fila ----------
@@ -887,6 +997,12 @@ async function showLibrary() {
   });
   setSyncStatus('> carregando temas da sua conta…');
 
+  // Primeiro a cópia guardada neste aparelho: o app aparece pronto na hora, mesmo sem
+  // internet, e volta na aba e na playlist de quando você fechou.
+  const fromCache = applyLibrarySnapshot((await loadCache(CACHE_LIBRARY))?.data);
+  if (fromCache) await restoreUi((await loadCache(CACHE_UI))?.data);
+
+  // Depois pergunta ao Spotify o que mudou e substitui as listas.
   const meRequest = api.getMe();
   const libraryRequest = Promise.all([
     meRequest,
@@ -895,6 +1011,7 @@ async function showLibrary() {
   ]).then(([user, tracks, lists]) => {
     me = user;
     $('#user-name').textContent = me.display_name ?? me.id;
+    resetLibraryState();
     addLikedPage(tracks);
     addPlaylistsPage(lists);
   });
@@ -902,6 +1019,17 @@ async function showLibrary() {
   const themesRequest = libraryRequest
     .then(loadAllPlaylists)
     .then(() => syncFromPlaylists(themePlaylists));
+
+  // Com cache não há tela de boot nem espera: a atualização acontece por baixo.
+  if (fromCache) {
+    safely(() => libraryRequest).then(() => {
+      // As listas foram refeitas: aponta pra nova cópia da playlist aberta.
+      if (openPlaylist) openPlaylist = playlists.find((p) => p.id === openPlaylist.id) ?? openPlaylist;
+      renderPlaylists();
+    });
+    syncThemes(themesRequest);
+    return;
+  }
 
   const boot = startBoot();
   boot.line('connecting to spotify', meRequest);
@@ -932,8 +1060,8 @@ async function syncThemes(request) {
 // ---------- Botões ----------
 
 $('#login-btn').addEventListener('click', () => safely(login));
-$('#logout-btn').addEventListener('click', () => {
-  logout();
+$('#logout-btn').addEventListener('click', async () => {
+  await forgetEverything();
   location.replace(APP_ROOT);
 });
 $('#notice-close').addEventListener('click', hideNotice);

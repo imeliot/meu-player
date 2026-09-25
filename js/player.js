@@ -12,6 +12,7 @@ import { drawPixelCover, clearPixelCover } from './cover.js';
 const SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
 const VOLUME_KEY = 'player_volume';
 const MODE_KEY = 'player_mode'; // escolha manual (:mode): 'remote' ou 'sdk'
+const LAST_DEVICE_KEY = 'player_last_device'; // último aparelho usado (pra reconectar)
 const POLL_MS = 3000; // intervalo do polling
 const POLL_MAX_MS = 30000; // teto quando o Spotify pede pra ir mais devagar (429)
 
@@ -179,6 +180,7 @@ function fromWebApi(s) {
 
 let pollTimer = null;
 let pollDelay = POLL_MS;
+let reconnectOnNextPoll = false; // voltou pro app (ou pra internet): tenta reconectar
 
 function pollingWanted() {
   return isRemote() && document.visibilityState === 'visible';
@@ -201,6 +203,15 @@ async function poll() {
     const s = await api.getPlaybackState();
     pollDelay = POLL_MS;
     remote = s?.device ? { state: s, device: s.device } : null;
+    if (remote?.device?.id) rememberDevice(remote.device.id);
+    // O Spotify desliga o aparelho sozinho depois de um tempo parado. Ao voltar pro app,
+    // tenta reconectar uma vez, sem incomodar.
+    if (!remote && isRemote() && reconnectOnNextPoll) {
+      reconnectOnNextPoll = false;
+      reconnect().catch((err) => console.error(err));
+      return schedulePoll();
+    }
+    reconnectOnNextPoll = false;
     if (isRemote()) {
       lastState = remote && s.item ? fromWebApi(s) : null;
       lastStateAt = Date.now();
@@ -223,11 +234,21 @@ async function poll() {
 
 // Tela apagada / app em segundo plano: para de perguntar. Voltou: pergunta na hora.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') schedulePoll(0);
-  else {
+  if (document.visibilityState === 'visible') {
+    reconnectOnNextPoll = true; // pode ter ficado parado tempo demais
+    pollDelay = POLL_MS; // recomeça no ritmo normal
+    schedulePoll(0);
+  } else {
     clearTimeout(pollTimer);
     pollTimer = null;
   }
+});
+
+// Voltou a internet (saiu do metrô, trocou de wi-fi): pergunta na hora.
+window.addEventListener('online', () => {
+  reconnectOnNextPoll = true;
+  pollDelay = POLL_MS;
+  schedulePoll(0);
 });
 
 // ---------- Início ----------
@@ -359,6 +380,40 @@ export async function playHere({ contextUri, uris, offset }) {
   await api.play({ deviceId, contextUri, uris, offset });
 }
 
+// ---------- Reconectar (o aparelho sumiu) ----------
+
+// Lembra o último aparelho usado, pra tentar voltar pra ele sozinho.
+function rememberDevice(id) {
+  try {
+    localStorage.setItem(LAST_DEVICE_KEY, id);
+  } catch {
+    // sem problema: só não lembra entre sessões
+  }
+}
+
+function lastDeviceId() {
+  try {
+    return localStorage.getItem(LAST_DEVICE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+// Procura os aparelhos da conta e assume o controle de um deles. Prefere o que já está
+// tocando, depois o último que você usou, e por fim qualquer um que aceite comandos.
+// Devolve o nome do aparelho, ou null se não houver nenhum ligado.
+export async function reconnect() {
+  const devices = (await api.getDevices())?.devices ?? [];
+  const usable = devices.filter((d) => d.id && !d.is_restricted);
+  const target =
+    usable.find((d) => d.is_active) ?? usable.find((d) => d.id === lastDeviceId()) ?? usable[0];
+  if (!target) return null;
+  if (!target.is_active) await api.transferPlayback(target.id, false);
+  rememberDevice(target.id);
+  pollSoon();
+  return target.name;
+}
+
 // Manda a reprodução pra outro dispositivo (lista "dispositivos").
 export async function transferTo(id) {
   // Pra este navegador: precisa "ativar" o áudio dentro do clique.
@@ -376,7 +431,7 @@ export const browserDeviceId = () => deviceId;
 function idleMessage() {
   if (remote?.device) return `> ${remote.device.name}: nada tocando. escolha uma música.`;
   if (mode === 'sdk') return deviceId ? '> pronto. clique numa música pra tocar.' : '> carregando player…';
-  return '> nenhum dispositivo ativo. abra o spotify uma vez e volte.';
+  return '> nenhum aparelho ligado. abra o spotify uma vez e toque em [reconectar].';
 }
 
 // Atualiza a barra "tocando agora" com o estado atual.
@@ -390,9 +445,12 @@ function render() {
     clearPixelCover($('#pb-cover'));
     $('#pb-device').textContent = '';
     $('#pb-status').textContent = idleMessage();
+    // Sem aparelho no modo remoto: oferece o botão de reconectar.
+    $('#pb-reconnect').hidden = !(isRemote() && !remote?.device);
     callbacks.onTrackChange(null);
     return;
   }
+  $('#pb-reconnect').hidden = true;
 
   setControlsEnabled(true);
   $('#pb-info').hidden = false;
@@ -563,6 +621,26 @@ export const currentTrack = () => lastState?.track_window.current_track ?? null;
 
 function setupControls() {
   setControlsEnabled(false);
+
+  // "Perdi o aparelho": procura de novo e volta a controlar.
+  $('#pb-reconnect').addEventListener('click', () =>
+    run(async () => {
+      $('#pb-status').textContent = '> procurando aparelhos…';
+      let name;
+      try {
+        name = await reconnect();
+      } finally {
+        // Deu errado (ou não achou nada): volta a mensagem normal.
+        if (!name) $('#pb-status').textContent = idleMessage();
+      }
+      if (!name) {
+        throw new Error(
+          'nenhum aparelho ligado. abra o app do spotify (ou toque algo nele) e tente de novo.',
+        );
+      }
+      $('#pb-status').textContent = `> reconectado: ${name}`;
+    }),
+  );
 
   // Os botões ficam desativados sem música, então "lastState &&" só evita avisos à toa.
   $('#pb-toggle').addEventListener('click', () => run(() => lastState && togglePlay()));

@@ -42,6 +42,7 @@ arquivos do app, nunca dados do Spotify, e fica desligado no `127.0.0.1`.
 - `js/boot.js` — tela de boot
 - `js/cover.js` — capa do álbum pixelada
 - `js/roll.js` — títulos compridos andam de lado (letreiro) pra dar pra ler
+- `js/cache.js` — guarda a biblioteca neste aparelho (abrir rápido, voltar de onde parou, funcionar sem internet)
 - `js/themes.js` — aplica temas, guarda no navegador e sincroniza com a conta (playlists "⚙ tema:")
 - `js/settings.js` — painel [config] (temas e fontes)
 - `js/cmdline.js` — linha de comando (atalhos `/` e `:`, histórico, Tab, filtro e busca)

@@ -14,7 +14,10 @@ function friendlyMessage(status, apiMessage) {
   if (status === 404 && /device/i.test(apiMessage))
     return 'nenhum dispositivo ativo. abra o spotify uma vez e volte.';
   if (status === 404) return `Não encontrado. (${apiMessage})`;
-  if (status === 429) return 'Muitas requisições seguidas. Espere alguns segundos e tente de novo.';
+  // O navegador não consegue ler quanto tempo o Spotify pediu (Retry-After não é liberado
+  // pra sites), e às vezes são horas. Então a mensagem não promete segundos.
+  if (status === 429)
+    return 'O Spotify limitou as requisições por um tempo. Pode ser segundos ou algumas horas: tente de novo mais tarde.';
   return `Erro na API do Spotify (${status}). ${apiMessage}`;
 }
 
@@ -22,14 +25,21 @@ function friendlyMessage(status, apiMessage) {
 // (a API devolve URLs prontas no campo "next" pra buscar a próxima página).
 async function request(method, pathOrUrl, body) {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : API + pathOrUrl;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${await getAccessToken()}`,
-      ...(body && { 'Content-Type': 'application/json' }),
-    },
-    body: body && JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${await getAccessToken()}`,
+        ...(body && { 'Content-Type': 'application/json' }),
+      },
+      body: body && JSON.stringify(body),
+    });
+  } catch (cause) {
+    // Sem internet, wi-fi caindo, celular no bolso: erro de rede, não do Spotify.
+    // Fica sem "status" de propósito: é assim que o app sabe que pode usar o cache.
+    throw new Error('Sem internet (ou o Spotify não respondeu). Tente de novo.', { cause });
+  }
   if (!res.ok) {
     // O Spotify costuma mandar { error: { status, message } } no corpo.
     const data = await res.json().catch(() => null);
