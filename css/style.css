@@ -17,6 +17,8 @@ body {
   color: var(--text);
   font-family: var(--font-main), var(--font-box); /* o que faltar no VT323 (ex: ♥) vem da Departure */
   font-size: var(--text-size);
+  font-weight: var(--font-weight, 400); /* fontes com peso próprio (ex: JetBrains Light) */
+  letter-spacing: var(--font-spacing, 0);
   line-height: var(--line-height);
 
   /* Fonte de pixel: sem negrito/itálico falso e sem suavização onde o navegador deixa
@@ -563,6 +565,13 @@ html:has(#library-view:not([hidden])) body {
   min-width: 0;
 }
 
+/* [reconectar] e [abrir o spotify]: lado a lado, sem se sobrepor */
+.pb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2ch;
+}
+
 .now-title {
   white-space: nowrap;
   overflow: hidden;
@@ -979,6 +988,26 @@ html:has(#library-view:not([hidden])) body {
     display: none !important;
   }
 
+  /* Álbum na tela estreita: nome numa linha, artista/ano/faixas na linha de baixo
+     (numa linha só, o nome ficava cortado e não dava pra saber qual álbum era). */
+  .album-row .lib-item {
+    display: flex;
+    flex-wrap: wrap;
+    white-space: normal;
+    align-items: flex-start;
+    padding: calc(var(--gap) / 2) 0;
+  }
+
+  .album-row .lib-name {
+    flex: 1 1 100%;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .album-row .lib-item .dim {
+    flex: 1 1 100%;
+  }
+
   /* Fileira de comandos rápidos acima da linha de comando */
   .quick-row {
     display: flex;
@@ -1160,6 +1189,12 @@ html:has(#library-view:not([hidden])) body {
   #pb-info {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  /* No celular a barra é uma grade: os botões ficam na linha de baixo, inteiros */
+  .pb-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .now-progress,

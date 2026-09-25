@@ -56,6 +56,30 @@ export const PRESET_THEMES = [
     },
     cursor: '#e5383b',
   },
+  {
+    name: 'gruvbox', // o mesmo do VS Code (Gruvbox Dark Medium)
+    colors: {
+      bg: '#282828',
+      panel: '#32302f',
+      border: '#504945',
+      text: '#ebdbb2',
+      textDim: '#928374',
+      accent: '#fabd2f',
+    },
+    cursor: '#fe8019',
+  },
+  {
+    name: 'wallpaper', // cores tiradas do papel de parede (buraco negro + campo dourado)
+    colors: {
+      bg: '#19120c',
+      panel: '#261e18',
+      border: '#51443b',
+      text: '#efe0d6',
+      textDim: '#9e8e82',
+      accent: '#ffb77c',
+    },
+    cursor: '#ffb77c',
+  },
 ];
 
 // O primeiro tema da lista é o padrão.
@@ -68,6 +92,14 @@ export const FONTS = [
   { id: 'vt323', label: 'VT323', family: "'VT323'", size: '25px' },
   { id: 'departure', label: 'Departure Mono', family: "'Departure Mono'", size: '22px' },
   { id: 'jetbrains', label: 'JetBrains Mono', family: "'JetBrains Mono'", size: '18px' },
+  {
+    id: 'jetbrains-light',
+    label: 'JetBrains Mono Light',
+    family: "'JetBrains Mono Light'",
+    size: '18px',
+    weight: 300,
+    spacing: '0.6px', // igual ao editor do sistema
+  },
 ];
 
 export const DEFAULT_FONT = FONTS[0].id;

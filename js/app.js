@@ -6,7 +6,7 @@ import { login, logout, isLoggedIn, hasAllScopes } from './auth.js';
 import { APP_ROOT } from './config.js';
 import * as api from './api.js';
 import { initPlayer, playHere, currentTrack } from './player.js';
-import { initCmdline, hint, prefill } from './cmdline.js';
+import { initCmdline, hint, prefill, escapeNow } from './cmdline.js';
 import { initDevices, setDevicesShown } from './devices.js';
 import { initRoll } from './roll.js';
 import { registerApp, fold } from './commands.js';
@@ -1330,6 +1330,12 @@ async function showLibrary() {
     filter: setFilter,
     clearFilter,
     focusList,
+    // Esc / [esc] sem nada digitado: sai da busca, do álbum ou da playlist aberta.
+    back: () => {
+      if (currentView === 'liked') return;
+      closePlaylistView();
+      showTab('list');
+    },
     search: async (query) => {
       try {
         return { ok: true, message: await runSearch(query) };
@@ -1460,9 +1466,10 @@ for (const btn of document.querySelectorAll('.panel-close')) {
 }
 // Comandos rápidos (tela de toque): preenchem a linha de comando ou abrem um painel.
 for (const btn of document.querySelectorAll('.quick')) {
-  btn.addEventListener('click', () =>
-    btn.dataset.tab ? showTab(btn.dataset.tab) : prefill(btn.dataset.insert),
-  );
+  btn.addEventListener('click', () => {
+    if (btn.dataset.esc) return escapeNow(); // celular não tem tecla Esc
+    return btn.dataset.tab ? showTab(btn.dataset.tab) : prefill(btn.dataset.insert);
+  });
 }
 $('#config-close').addEventListener('click', () => showTab('list'));
 for (const tab of document.querySelectorAll('.tab')) {

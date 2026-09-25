@@ -113,6 +113,8 @@ function paint(theme, fontId) {
   const font = FONTS.find((f) => f.id === fontId) ?? FONTS[0];
   vars['--font-main'] = `${font.family}, monospace`;
   vars['--font-size'] = font.size;
+  vars['--font-weight'] = String(font.weight ?? 400);
+  vars['--font-spacing'] = font.spacing ?? '0';
 
   root.removeProperty('--cursor'); // volta pro padrão (= cor do texto) se o tema não tiver
   for (const [k, v] of Object.entries(vars)) root.setProperty(k, v);

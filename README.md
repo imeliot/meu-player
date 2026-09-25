@@ -31,7 +31,7 @@ arquivos do app, nunca dados do Spotify, e fica desligado no `127.0.0.1`.
 - `callback/index.html` — página para onde o Spotify volta depois do login
 - `js/presets.js` — **temas e fontes fixos** (edite à mão pra criar presets)
 - `css/theme.css` — valores padrão de cores, fontes e medidas
-- `fonts/` — VT323 e Departure Mono (licença SIL OFL), guardadas no projeto pra funcionar offline
+- `fonts/` — VT323, Departure Mono e JetBrains Mono (Regular e Light; licença SIL OFL), guardadas no projeto pra funcionar offline
 - `css/style.css` — layout
 - `js/config.js` — Client ID, Redirect URI e permissões (scopes)
 - `js/auth.js` — login PKCE e renovação do token

@@ -40,6 +40,7 @@ const SHELL = [
   'fonts/VT323-Regular.woff2',
   'fonts/DepartureMono-Regular.woff2',
   'fonts/JetBrainsMono-Regular.woff2',
+  'fonts/JetBrainsMono-Light.woff2',
   'icons/favicon-32.png',
   'icons/icon-192.png',
   'icons/icon-512.png',

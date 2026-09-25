@@ -145,6 +145,14 @@ function leave() {
   input().blur();
 }
 
+// Esc (tecla ou botão [esc] do celular), em ordem: limpa o que está digitado e o filtro;
+// se já estava limpo, volta da busca/álbum pra lista de músicas.
+export function escapeNow() {
+  const hadText = input().value !== '';
+  leave();
+  if (!hadText) hooks.back?.();
+}
+
 // Botões rápidos (tela de toque): coloca um texto na linha e mostra as opções.
 export function prefill(text) {
   const box = input();
@@ -168,7 +176,7 @@ export function initCmdline(appHooks) {
   box.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      leave();
+      escapeNow();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       submit();
@@ -202,8 +210,7 @@ export function initCmdline(appHooks) {
       box.value = e.key;
       if (e.key === '/') hooks.filter('');
     } else if (e.key === 'Escape') {
-      hooks.clearFilter(); // Esc fora da caixa também limpa o filtro
-      clearOutput();
+      escapeNow(); // Esc fora da caixa: limpa o filtro e volta pra lista
     }
   });
 }

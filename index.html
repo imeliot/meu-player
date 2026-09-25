@@ -229,7 +229,11 @@
           <div class="now-main">
             <p id="pb-status" class="dim">&gt; carregando player…</p>
             <!-- Aparece quando o aparelho some (o Spotify desliga sozinho depois de parado) -->
-            <button id="pb-reconnect" class="btn-link" hidden>[reconectar]</button>
+            <span class="pb-actions">
+              <button id="pb-reconnect" class="btn-link" hidden>[reconectar]</button>
+              <!-- Abre o app do Spotify: sem ele ligado, o celular não tem o que controlar -->
+              <a id="pb-open-spotify" class="btn-link" href="spotify:" hidden>[abrir o spotify]</a>
+            </span>
             <p id="pb-info" class="now-title" hidden>
               <span id="pb-title"></span> <span class="dim">-</span> <span id="pb-artist" class="dim"></span>
               <span id="pb-device" class="dim pb-device"></span>
@@ -274,10 +278,9 @@
         <p id="cmd-hint" class="dim cmd-hint" hidden></p>
         <!-- Comandos rápidos pra tela de toque -->
         <div class="quick-row">
+          <button class="btn-link quick" data-esc="1">[esc]</button>
           <button class="btn-link quick" data-insert="/">[/busca]</button>
           <button class="btn-link quick" data-insert=":add ">[:add]</button>
-          <button class="btn-link quick" data-insert=":theme ">[:theme]</button>
-          <button class="btn-link quick" data-tab="devices">[disp]</button>
         </div>
         <div class="prompt">
           <label for="cmd-input" class="dim"><span class="lbl-long">player@spotify:~$</span><span class="lbl-short">~$</span></label>

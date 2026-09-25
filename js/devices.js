@@ -56,8 +56,14 @@ function render(devices) {
   } else {
     status.textContent =
       '> nenhum dispositivo ativo. abra o spotify uma vez e volte.' +
-      (devices.length ? ' ou escolha um abaixo pra começar.' : '');
+      (devices.length ? ' ou escolha um abaixo pra começar.' : ' ');
     status.className = 'dim';
+    if (!devices.length) {
+      // Atalho pro app do Spotify: sem ele aberto, não há o que controlar.
+      const link = el('a', 'btn-link', '[abrir o spotify]');
+      link.href = 'spotify:';
+      status.append(link);
+    }
   }
 
   const mine = browserDeviceId();

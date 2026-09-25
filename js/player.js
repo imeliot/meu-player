@@ -208,7 +208,9 @@ async function poll() {
     // tenta reconectar uma vez, sem incomodar.
     if (!remote && isRemote() && reconnectOnNextPoll) {
       reconnectOnNextPoll = false;
-      reconnect().catch((err) => console.error(err));
+      reconnect()
+        .then((name) => name && ($('#pb-status').textContent = `> reconectado: ${name}`))
+        .catch((err) => console.error(err));
       return schedulePoll();
     }
     reconnectOnNextPoll = false;
@@ -445,12 +447,16 @@ function render() {
     clearPixelCover($('#pb-cover'));
     $('#pb-device').textContent = '';
     $('#pb-status').textContent = idleMessage();
-    // Sem aparelho no modo remoto: oferece o botão de reconectar.
-    $('#pb-reconnect').hidden = !(isRemote() && !remote?.device);
+    // Sem aparelho pra controlar: oferece reconectar e abrir o app do Spotify.
+    // (No PC com o player deste navegador pronto, não precisa de nada disso.)
+    const noDevice = !remote?.device && (mode === 'remote' || !deviceId);
+    $('#pb-reconnect').hidden = !noDevice;
+    $('#pb-open-spotify').hidden = !noDevice;
     callbacks.onTrackChange(null);
     return;
   }
   $('#pb-reconnect').hidden = true;
+  $('#pb-open-spotify').hidden = true;
 
   setControlsEnabled(true);
   $('#pb-info').hidden = false;

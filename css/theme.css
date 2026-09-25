@@ -21,6 +21,15 @@
   font-display: swap;
 }
 
+/* Mesma fonte do VS Code/terminal do Jorao: JetBrains Mono em peso Light.
+   (A "Nerd Font" tem os mesmos desenhos; os ícones extras o app não usa.) */
+@font-face {
+  font-family: 'JetBrains Mono Light';
+  src: url('../fonts/JetBrainsMono-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-display: swap;
+}
+
 :root {
   /* ---------- Paleta ---------- */
   --bg: #262624; /* fundo da página */
@@ -41,6 +50,7 @@
      Fontes de pixel só ficam nítidas em tamanhos "exatos":
      VT323 → múltiplos de 25px | Departure Mono → múltiplos de 11px. */
   --font-main: 'VT323', monospace; --font-size: 25px;
+  --font-weight: 400; --font-spacing: 0;
 
   /* Escala do app: 1 no computador; no celular fica menor (veja o fim deste arquivo).
      O tamanho real do texto = tamanho da fonte × escala. */
