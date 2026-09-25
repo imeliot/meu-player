@@ -358,6 +358,11 @@ html:has(#library-view:not([hidden])) body {
   flex-shrink: 0;
 }
 
+/* Playlist fixada: "* nome" (a escolhida continua com "> ") */
+.lib-item.pinned::before {
+  content: '* ';
+}
+
 .lib-item.selected::before {
   content: '> ';
   color: var(--accent);

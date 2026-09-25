@@ -12,6 +12,7 @@ import { initRoll } from './roll.js';
 import { registerApp, fold } from './commands.js';
 import { startBoot } from './boot.js';
 import { isThemePlaylist, syncFromPlaylists } from './themes.js';
+import * as pins from './pins.js';
 import { loadCache, saveCache, dropCache, debounce } from './cache.js';
 import { initConfig, setSyncStatus, closeConfig } from './settings.js';
 import {
@@ -41,9 +42,10 @@ let likedTotal = 0;
 // Quais músicas estão curtidas: uri → true/false (usado pelos corações).
 const likedStatus = new Map();
 
-let playlists = []; // playlists carregadas (sem as de tema)
+let playlists = []; // playlists carregadas (sem as de bastidor)
 let playlistsTotal = 0;
 const themePlaylists = []; // playlists "⚙ tema: …" (escondidas; viram temas no [config])
+let pinsPlaylist = null; // playlist "⚙ fixadas" (escondida; guarda quais estão fixadas)
 
 let openPlaylist = null; // playlist aberta no momento
 let playlistEntries = []; // músicas dela: { track, position }
@@ -139,6 +141,7 @@ function resetLibraryState() {
   playlists = [];
   playlistsTotal = 0;
   themePlaylists.length = 0;
+  pinsPlaylist = null;
   nextPage.tracks = null;
   nextPage.playlists = null;
 }
@@ -443,12 +446,14 @@ async function checkLiked(tracks) {
 
 function renderPlaylists() {
   $('#playlists-list').replaceChildren(
-    ...playlists.map((p) => {
+    ...sortedPlaylists().map((p) => {
       const li = el('li');
       const btn = el('button', 'lib-item');
       btn.type = 'button';
       btn.classList.toggle('selected', openPlaylist?.id === p.id);
-      btn.title = `${p.name} · de ${p.owner?.display_name ?? 'desconhecido'}`;
+      btn.classList.toggle('pinned', isPinned(p));
+      btn.title =
+        `${p.name} · de ${p.owner?.display_name ?? 'desconhecido'}` + (isPinned(p) ? ' · fixada' : '');
       btn.append(el('span', 'lib-name', p.name), el('span', 'dim', String(trackCount(p))));
       btn.addEventListener('click', () => safely(() => openPlaylistView(p)));
       li.append(btn);
@@ -461,11 +466,13 @@ function renderPlaylists() {
 }
 
 function addPlaylistsPage(page) {
-  // As playlists que guardam temas nunca aparecem nas listas do app.
+  // As playlists de bastidor ("⚙ tema: …" e "⚙ fixadas") nunca aparecem nas listas.
   const items = page.items.filter(Boolean);
   themePlaylists.push(...items.filter(isThemePlaylist));
-  playlists.push(...items.filter((p) => !isThemePlaylist(p)));
-  playlistsTotal = page.total - themePlaylists.length;
+  pinsPlaylist = items.find(pins.isPinsPlaylist) ?? pinsPlaylist;
+  const hidden = (p) => isThemePlaylist(p) || pins.isPinsPlaylist(p);
+  playlists.push(...items.filter((p) => !hidden(p)));
+  playlistsTotal = page.total - themePlaylists.length - (pinsPlaylist ? 1 : 0);
   nextPage.playlists = page.next;
   renderPlaylists();
 }
@@ -516,6 +523,42 @@ function findPlaylistByName(name) {
   if (found.length === 1) return found[0];
   if (!found.length) throw new Error(`playlist não encontrada: ${name}`);
   throw new Error(`mais de uma playlist combina: ${found.map((p) => p.name).join(', ')} (use tab)`);
+}
+
+// ---------- Playlists fixadas ----------
+
+const isPinned = (playlist) => pins.isPinned(playlist.id);
+
+// Fixadas primeiro, na ordem em que você fixou; o resto continua na ordem do Spotify.
+function sortedPlaylists() {
+  const order = pins.pinnedIds();
+  const pinned = playlists.filter(isPinned).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  return [...pinned, ...playlists.filter((p) => !isPinned(p))];
+}
+
+async function togglePinned(playlist) {
+  const { pinned, full } = pins.toggle(playlist.id);
+  if (full) {
+    throw new Error(`no máximo ${pins.pinLimit()} playlists fixadas (a descrição do spotify é curta).`);
+  }
+  renderPlaylists();
+  renderPinButton();
+  showNotice(
+    pinned ? `"${playlist.name}" fixada no topo.` : `"${playlist.name}" desafixada.`,
+    'success',
+  );
+  // Guarda na conta pra valer nos outros aparelhos (se falhar, fica só neste).
+  try {
+    await pins.push();
+  } catch (err) {
+    console.error(err);
+    showNotice('fixada só neste aparelho: o spotify não aceitou salvar a lista agora.');
+  }
+}
+
+function renderPinButton() {
+  if (!openPlaylist) return;
+  $('#playlist-pin').textContent = isPinned(openPlaylist) ? '[desafixar]' : '[fixar]';
 }
 
 // ---------- Álbuns ----------
@@ -869,6 +912,7 @@ function renderPlaylistHeader() {
   $('#playlist-description').textContent = description;
   $('#playlist-description').hidden = !description;
   $('#playlist-edit').hidden = !isOwner(p);
+  renderPinButton();
   // No Spotify, "excluir" é deixar de seguir, inclusive das suas playlists.
   $('#playlist-delete').textContent = isOwner(p) ? '[excluir]' : '[deixar de seguir]';
 }
@@ -1241,6 +1285,8 @@ async function showLibrary() {
   // Temas: as playlists "⚙ tema:" podem estar em qualquer página, então carrega todas.
   const themesRequest = libraryRequest
     .then(loadAllPlaylists)
+    // As fixadas vêm da playlist escondida "⚙ fixadas" (valem em todos os aparelhos).
+    .then(() => pins.sync(pinsPlaylist).then((changed) => changed && renderPlaylists()))
     .then(() => syncFromPlaylists(themePlaylists));
 
   // Com cache não há tela de boot nem espera: a atualização acontece por baixo.
@@ -1321,6 +1367,7 @@ for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => showTab(tab.dataset.tab));
 }
 $('#playlist-play').addEventListener('click', () => safely(() => playInPlaylist(null)));
+$('#playlist-pin').addEventListener('click', () => safely(() => togglePinned(openPlaylist)));
 $('#playlist-edit').addEventListener('click', () => safely(editPlaylist));
 $('#playlist-delete').addEventListener('click', () => safely(deletePlaylist));
 $('#playlist-more').addEventListener('click', () => safely(loadMore));
