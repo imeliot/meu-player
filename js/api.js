@@ -111,6 +111,19 @@ export const SEARCH_MAX_OFFSET = 1000;
 export const searchTracks = (query, next) =>
   get(next ?? `/search?type=track&limit=${SEARCH_PAGE}&q=${encodeURIComponent(query)}`);
 
+// Busca músicas E álbuns numa requisição só (o "type" aceita os dois).
+export const searchTracksAndAlbums = (query) =>
+  get(`/search?type=track,album&limit=${SEARCH_PAGE}&q=${encodeURIComponent(query)}`);
+
+// ---------- Álbuns ----------
+
+// Álbuns salvos na sua conta — GET /me/albums (máx. 50 por página).
+export const getSavedAlbums = (next) => get(next ?? '/me/albums?limit=50');
+
+// Músicas de um álbum — GET /albums/{id}/tracks (máx. 50 por página).
+// Elas vêm sem os dados do álbum (nome e capa), que o app já tem em mãos.
+export const getAlbumTracks = (id, next) => get(next ?? `/albums/${id}/tracks?limit=50`);
+
 // ---------- Player ----------
 
 // Aleatório ligado/desligado — PUT /me/player/shuffle.

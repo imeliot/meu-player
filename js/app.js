@@ -33,7 +33,7 @@ import {
 let me = null; // usuário logado
 
 // URL da próxima página de cada lista (null = acabou).
-const nextPage = { tracks: null, playlists: null, playlistItems: null, search: null };
+const nextPage = { tracks: null, playlists: null, playlistItems: null, search: null, albums: null };
 
 let likedTracks = []; // músicas curtidas carregadas (mais recente primeiro)
 let likedTotal = 0;
@@ -55,6 +55,12 @@ let currentView = 'liked';
 
 let searchResults = []; // resultados da busca "?texto"
 let searchTotal = 0;
+let searchAlbums = []; // álbuns encontrados na mesma busca
+
+let savedAlbums = []; // álbuns salvos na conta
+let savedAlbumsTotal = 0;
+let openAlbum = null; // álbum aberto no painel da direita
+let albumTracks = []; // músicas dele
 
 let filterText = ''; // filtro "/texto" da lista aberta
 let selectedTrack = null; // música escolhida pelo teclado (usada por :add)
@@ -512,21 +518,226 @@ function findPlaylistByName(name) {
   throw new Error(`mais de uma playlist combina: ${found.map((p) => p.name).join(', ')} (use tab)`);
 }
 
+// ---------- Álbuns ----------
+
+const albumArtists = (album) => (album.artists ?? []).map((a) => a.name).join(', ');
+const albumYear = (album) => (album.release_date ?? '').slice(0, 4);
+
+// Quais álbuns estão salvos na sua biblioteca: uri → true/false.
+const albumSaved = new Map();
+
+// Linha de álbum (nas buscas e na lista de salvos), com o ♥ de salvar/tirar.
+function albumRow(album) {
+  const li = el('li', 'album-row');
+  li.dataset.search = fold(`${album.name} ${albumArtists(album)}`);
+  const btn = el('button', 'lib-item');
+  btn.type = 'button';
+  const detail = [albumArtists(album), albumYear(album), `${album.total_tracks ?? '?'} músicas`]
+    .filter(Boolean)
+    .join(' · ');
+  btn.title = `${album.name} · ${detail}`;
+  btn.append(el('span', 'lib-name', album.name), el('span', 'dim', detail));
+  btn.addEventListener('click', () => safely(() => openAlbumView(album)));
+  const heart = actionButton('Salvar álbum', '♥', () => safely(() => toggleAlbumSaved(album)), 'heart');
+  heart.dataset.albumUri = album.uri;
+  paintAlbumHeart(heart);
+  li.append(btn, heart);
+  return li;
+}
+
+// Coração do álbum: apagado = não salvo; na cor de destaque = salvo.
+function paintAlbumHeart(btn) {
+  const saved = albumSaved.get(btn.dataset.albumUri) === true;
+  btn.classList.toggle('liked', saved);
+  btn.setAttribute('aria-pressed', String(saved));
+  const label = saved ? 'Tirar da sua biblioteca' : 'Salvar na sua biblioteca';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+}
+
+const refreshAlbumHearts = () => {
+  document.querySelectorAll('[data-album-uri]').forEach(paintAlbumHeart);
+  renderAlbumSaveButton();
+};
+
+// Pergunta ao Spotify quais destes álbuns você já salvou (até 40 por vez).
+async function checkAlbumsSaved(albums) {
+  const uris = albums.map((a) => a.uri).filter((uri) => uri && !albumSaved.has(uri));
+  for (let i = 0; i < uris.length; i += 40) {
+    const chunk = uris.slice(i, i + 40);
+    const result = await api.libraryContains(chunk);
+    chunk.forEach((uri, j) => albumSaved.set(uri, Boolean(result?.[j])));
+  }
+  refreshAlbumHearts();
+}
+
+// Salva ou tira o álbum da sua biblioteca (é o mesmo "salvar" do app do Spotify).
+async function toggleAlbumSaved(album) {
+  const saved = albumSaved.get(album.uri) === true;
+  if (saved) {
+    await api.removeFromLibrary([album.uri]);
+    albumSaved.set(album.uri, false);
+    savedAlbums = savedAlbums.filter((a) => a.id !== album.id);
+    savedAlbumsTotal = Math.max(0, savedAlbumsTotal - 1);
+    showNotice(`"${album.name}" saiu dos seus álbuns.`, 'success');
+  } else {
+    await api.saveToLibrary([album.uri]);
+    albumSaved.set(album.uri, true);
+    if (!savedAlbums.some((a) => a.id === album.id)) savedAlbums.unshift(album);
+    savedAlbumsTotal++;
+    showNotice(`"${album.name}" salvo na sua biblioteca.`, 'success');
+  }
+  if (currentView === 'albums') renderSavedAlbums();
+  else $('#albums-count').textContent = savedAlbumsTotal || '';
+  saveCache('albums', { items: savedAlbums, total: savedAlbumsTotal, next: nextPage.albums });
+  refreshAlbumHearts();
+}
+
+// Botão de salvar/tirar do álbum aberto.
+function renderAlbumSaveButton() {
+  const button = $('#album-save');
+  if (!openAlbum) return;
+  const saved = albumSaved.get(openAlbum.uri) === true;
+  button.textContent = saved ? '[- tirar da biblioteca]' : '[♥ salvar na biblioteca]';
+  button.classList.toggle('danger', saved);
+}
+
+// Abre um álbum e mostra as músicas dele. O álbum nunca muda, então a lista de músicas
+// fica guardada neste aparelho pra sempre: abrir de novo não custa requisição nenhuma.
+async function openAlbumView(album) {
+  openAlbum = album;
+  albumTracks = [];
+  showView('album');
+  setBoxTitle($('#panel-list'), `álbum: ${album.name}`);
+  $('#album-info').textContent =
+    `${albumArtists(album)} · ${albumYear(album)} · ${album.total_tracks ?? '?'} músicas`;
+  renderAlbumSaveButton();
+  checkAlbumsSaved([album]).catch((err) => console.error(err));
+  renderAlbumTracks();
+  showTab('list'); // no celular, pula pra aba da lista
+
+  const key = `album:${album.id}`;
+  const saved = (await loadCache(key))?.data;
+  if (openAlbum !== album) return;
+  if (saved?.length) {
+    albumTracks = saved;
+    renderAlbumTracks();
+    return checkLiked(albumTracks);
+  }
+
+  let page = await api.getAlbumTracks(album.id);
+  const items = [...page.items];
+  while (page.next) {
+    page = await api.getAlbumTracks(album.id, page.next);
+    items.push(...page.items);
+  }
+  if (openAlbum !== album) return;
+  // As músicas do álbum vêm sem os dados do álbum: colamos de volta (capa e nome).
+  albumTracks = items
+    .filter(Boolean)
+    .map((track) => ({ ...track, album: { id: album.id, name: album.name, images: album.images } }));
+  renderAlbumTracks();
+  saveCache(key, albumTracks);
+  await checkLiked(albumTracks);
+}
+
+function renderAlbumTracks() {
+  $('#album-items').replaceChildren(
+    ...albumTracks.map((track) =>
+      trackRow(track, track.track_number, () => safely(() => playInAlbum(track))),
+    ),
+  );
+  applyFilter();
+}
+
+// Toca o álbum inteiro a partir da música escolhida (assim o "próxima" segue o álbum).
+const playInAlbum = (track) =>
+  playHere({ contextUri: openAlbum.uri, offset: track ? { uri: track.uri } : undefined });
+
+// Manda o álbum todo pra uma playlist (o Spotify aceita 100 músicas por vez).
+async function addAlbumToPlaylist() {
+  if (!albumTracks.length) throw new Error('o álbum ainda está carregando.');
+  const target = await pickPlaylistDialog(
+    playlists.filter(canEditItems),
+    `${openAlbum.name} · álbum inteiro (${albumTracks.length} músicas)`,
+  );
+  if (!target) return;
+  const uris = albumTracks.filter((t) => !isLocal(t)).map((t) => t.uri);
+  for (let i = 0; i < uris.length; i += 100) {
+    await api.addToPlaylist(target.id, uris.slice(i, i + 100));
+  }
+  setTrackCount(target, trackCount(target) + uris.length);
+  renderPlaylists();
+  if (openPlaylist?.id === target.id) await reloadPlaylistItems();
+  showNotice(`${uris.length} músicas de "${openAlbum.name}" em "${target.name}".`, 'success');
+}
+
+// Lista dos álbuns salvos na conta (fica no cache; só atualiza quando você abre a lista).
+async function showSavedAlbums() {
+  showView('albums');
+  setBoxTitle($('#panel-list'), 'álbuns salvos');
+  showTab('list');
+
+  const saved = (await loadCache('albums'))?.data;
+  if (saved?.items?.length) {
+    savedAlbums = saved.items;
+    savedAlbumsTotal = saved.total;
+    nextPage.albums = saved.next;
+    renderSavedAlbums();
+  } else {
+    $('#albums-status').textContent = '> carregando álbuns salvos…';
+  }
+
+  savedAlbums = [];
+  addSavedAlbumsPage(await api.getSavedAlbums());
+}
+
+function addSavedAlbumsPage(page) {
+  savedAlbums.push(...page.items.map((item) => item?.album).filter(Boolean));
+  savedAlbumsTotal = page.total;
+  nextPage.albums = page.next;
+  renderSavedAlbums();
+  saveCache('albums', { items: savedAlbums, total: savedAlbumsTotal, next: nextPage.albums });
+}
+
+function renderSavedAlbums() {
+  // Estão na lista de salvos, então estão salvos: o ♥ já nasce aceso.
+  for (const album of savedAlbums) albumSaved.set(album.uri, true);
+  $('#albums-list').replaceChildren(...savedAlbums.map(albumRow));
+  $('#albums-count').textContent = savedAlbumsTotal || '';
+  $('#albums-status').textContent = savedAlbumsTotal
+    ? `> ${savedAlbums.length} de ${savedAlbumsTotal} álbuns salvos`
+    : '> nenhum álbum salvo. salve álbuns no spotify e eles aparecem aqui.';
+  $('#albums-more').hidden = !nextPage.albums;
+  applyFilter();
+}
+
 // ---------- Painel da direita: curtidas, playlist ou busca ----------
 
 function showView(view) {
   currentView = view;
   if (view !== 'playlist') openPlaylist = null;
+  if (view !== 'album') openAlbum = null;
   $('#liked-view').hidden = view !== 'liked';
   $('#playlist-view').hidden = view !== 'playlist';
   $('#playlist-detail').hidden = view !== 'playlist';
   $('#search-view').hidden = view !== 'search';
+  $('#albums-view').hidden = view !== 'albums';
+  $('#album-view').hidden = view !== 'album';
+  $('#album-detail').hidden = view !== 'album';
   $('#liked-entry').classList.toggle('selected', view === 'liked');
+  $('#albums-entry').classList.toggle('selected', view === 'albums');
   applyFilter();
   saveUiSoon();
 }
 
-const LIST_OF_VIEW = { liked: '#tracks-list', playlist: '#playlist-items', search: '#search-list' };
+const LIST_OF_VIEW = {
+  liked: '#tracks-list',
+  playlist: '#playlist-items',
+  search: '#search-list',
+  albums: '#albums-list',
+  album: '#album-items',
+};
 
 // Filtro "/texto": esconde as linhas que não combinam (só na lista aberta, sem chamar a API).
 function applyFilter() {
@@ -577,6 +788,11 @@ const MORE = {
     next: () => nextPage.search,
     load: async () => addSearchPage(await api.searchTracks(null, nextPage.search)),
   },
+  albums: {
+    next: () => nextPage.albums,
+    load: async () => addSavedAlbumsPage(await api.getSavedAlbums(nextPage.albums)),
+  },
+  album: { next: () => null, load: async () => {} }, // o álbum já vem inteiro
 };
 
 let loadingMore = false; // evita buscar a mesma página duas vezes (↓ segurado)
@@ -601,8 +817,9 @@ async function loadMore() {
 // ---------- Busca "?texto" ----------
 
 async function runSearch(query) {
-  const page = await api.searchTracks(query);
+  const page = await api.searchTracksAndAlbums(query);
   searchResults = [];
+  searchAlbums = (page.albums?.items ?? []).filter(Boolean);
   filterText = '';
   showView('search');
   renderPlaylists(); // tira o ">" da playlist que estava aberta
@@ -610,8 +827,9 @@ async function runSearch(query) {
   showTab('list'); // no celular, pula pra aba da lista
   addSearchPage(page);
   const total = page.tracks?.total ?? 0;
-  return total
-    ? `${total} resultado(s). mostrando ${searchResults.length}; ↑↓ escolhe, enter toca.`
+  const albums = searchAlbums.length ? `${searchAlbums.length} álbum(ns) e ` : '';
+  return total || searchAlbums.length
+    ? `${albums}${total} música(s). mostrando ${searchResults.length}; ↑↓ escolhe, enter toca.`
     : 'nada encontrado.';
 }
 
@@ -632,7 +850,11 @@ function renderSearch() {
       trackRow(track, i + 1, () => safely(() => playFromList(searchResults, track))),
     ),
   );
-  $('#search-empty').hidden = searchResults.length > 0;
+  $('#search-albums').replaceChildren(...searchAlbums.map(albumRow));
+  checkAlbumsSaved(searchAlbums).catch((err) => console.error(err));
+  $('#search-albums-heading').hidden = !searchAlbums.length;
+  $('#search-tracks-heading').hidden = !(searchAlbums.length && searchResults.length);
+  $('#search-empty').hidden = searchResults.length > 0 || searchAlbums.length > 0;
   $('#search-more').hidden = !nextPage.search;
   $('#search-more').textContent = `[carregar mais] (${searchResults.length} de ${searchTotal})`;
   applyFilter();
@@ -980,6 +1202,7 @@ async function showLibrary() {
   registerApp({
     loadMore,
     showPanel: showTab,
+    showAlbums: () => safely(showSavedAlbums),
     playlistNames: () => playlists.filter(canEditItems).map((p) => p.name),
     addToPlaylist: async (name) => {
       const target = findPlaylistByName(name);
@@ -1075,6 +1298,11 @@ $('#liked-entry').addEventListener('click', () => {
   closePlaylistView();
   showTab('list');
 });
+$('#albums-entry').addEventListener('click', () => safely(showSavedAlbums));
+$('#albums-more').addEventListener('click', () => safely(loadMore));
+$('#album-play').addEventListener('click', () => safely(() => playInAlbum(null)));
+$('#album-save').addEventListener('click', () => safely(() => toggleAlbumSaved(openAlbum)));
+$('#album-add').addEventListener('click', () => safely(addAlbumToPlaylist));
 $('#config-open').addEventListener('click', () => showTab('config'));
 $('#queue-open').addEventListener('click', () => showTab('queue'));
 $('#devices-open').addEventListener('click', () => showTab('devices'));

@@ -374,6 +374,18 @@ html:has(#library-view:not([hidden])) body {
   color: var(--accent);
 }
 
+/* Linha de álbum: o item ocupa a linha e o ♥ (salvar) fica no fim. */
+.album-row {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+}
+
+.album-row .lib-item {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- Lista de músicas em colunas ---------- */
 
 .list-tools {

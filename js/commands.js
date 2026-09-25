@@ -10,6 +10,7 @@ const app = {
   createPlaylist: async () => {}, // (nome) → mensagem
   loadMore: async () => '', // carrega a próxima página da lista aberta → mensagem
   showPanel: () => {}, // abre um painel/aba: 'devices', 'queue'…
+  showAlbums: async () => {}, // abre a lista de álbuns salvos
 };
 export function registerApp(functions) {
   Object.assign(app, functions);
@@ -71,6 +72,10 @@ const COMMANDS = {
     run: async () => (app.showPanel('devices'), ok('dispositivos')),
   },
   fila: { help: 'mostra a fila', run: async () => (app.showPanel('queue'), ok('fila')) },
+  alb: {
+    help: 'álbuns salvos na sua conta (a busca "?texto" também mostra álbuns)',
+    run: async () => (await app.showAlbums(), ok('álbuns salvos')),
+  },
   mode: {
     args: '<remoto|navegador>',
     help: 'tocar neste navegador ou só controlar outro aparelho',

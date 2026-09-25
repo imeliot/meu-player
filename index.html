@@ -59,6 +59,10 @@
           <span class="lib-name">músicas curtidas</span>
           <span id="tracks-count" class="dim"></span>
         </button>
+        <button id="albums-entry" class="lib-item" type="button">
+          <span class="lib-name">álbuns salvos</span>
+          <span id="albums-count" class="dim"></span>
+        </button>
         <p class="lib-heading dim">-- playlists (<span id="playlists-count">0</span>) --</p>
         <ul id="playlists-list" class="list"></ul>
         <button id="playlists-more" class="btn-link" hidden>[carregar mais]</button>
@@ -84,6 +88,16 @@
           <p id="playlist-note" class="dim" hidden></p>
         </div>
 
+        <!-- Ferramentas do álbum aberto -->
+        <div id="album-detail" class="list-tools" hidden>
+          <div class="tool-row">
+            <button id="album-play" class="btn-link">[&gt; tocar álbum]</button>
+            <button id="album-save" class="btn-link">[♥ salvar na biblioteca]</button>
+            <button id="album-add" class="btn-link">[+ todas numa playlist]</button>
+          </div>
+          <p id="album-info" class="dim"></p>
+        </div>
+
         <div class="track-head" aria-hidden="true">
           <span class="col-num">#</span>
           <span class="col-title">título</span>
@@ -103,11 +117,26 @@
           <button id="playlist-more" class="btn-link" hidden>[carregar mais]</button>
         </div>
 
-        <!-- Resultados da busca "?texto" -->
+        <!-- Resultados da busca "?texto": álbuns em cima, músicas embaixo -->
         <div id="search-view" hidden>
           <p id="search-empty" class="dim" hidden>&gt; nada encontrado.</p>
+          <p id="search-albums-heading" class="lib-heading dim" hidden>-- álbuns --</p>
+          <ul id="search-albums" class="list"></ul>
+          <p id="search-tracks-heading" class="lib-heading dim" hidden>-- músicas --</p>
           <ul id="search-list" class="list"></ul>
           <button id="search-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+
+        <!-- Álbuns salvos na conta -->
+        <div id="albums-view" hidden>
+          <p id="albums-status" class="dim"></p>
+          <ul id="albums-list" class="list"></ul>
+          <button id="albums-more" class="btn-link" hidden>[carregar mais]</button>
+        </div>
+
+        <!-- Um álbum aberto, com as músicas dele -->
+        <div id="album-view" hidden>
+          <ul id="album-items" class="list"></ul>
         </div>
       </section>
 

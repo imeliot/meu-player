@@ -47,4 +47,4 @@ arquivos do app, nunca dados do Spotify, e fica desligado no `127.0.0.1`.
 - `js/settings.js` — painel [config] (temas e fontes)
 - `js/cmdline.js` — linha de comando (atalhos `/` e `:`, histórico, Tab, filtro e busca)
 - `js/commands.js` — comandos `:play`, `:add`, `:theme`… (digite `:help` no app)
-- `js/app.js` — monta a tela, toca e gerencia playlists
+- `js/app.js` — monta a tela, toca e gerencia playlists (inclui os álbuns: busca, salvos e o álbum aberto)
