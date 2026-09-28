@@ -66,15 +66,26 @@ export async function handleCallback() {
 
 // Faz o POST no endpoint de token e salva o resultado.
 async function requestToken(body) {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(body),
-  });
+  let res;
+  try {
+    res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(body),
+    });
+  } catch (cause) {
+    throw new Error('Sem internet (ou o Spotify não respondeu). Tente de novo.', { cause });
+  }
   if (!res.ok) {
-    const err = new Error(`Falha ao obter token (${res.status})`);
-    // Se a renovação falhou, o login expirou: tratamos como "não autorizado".
-    if (body.grant_type === 'refresh_token') err.status = 401;
+    const data = await res.json().catch(() => null);
+    // Só "invalid_grant" quer dizer que o login acabou de verdade (acesso removido, senha
+    // trocada…). Qualquer outra falha (Spotify fora do ar, limite de requisições) passa
+    // sozinha: não pode deslogar ninguém.
+    const expired = body.grant_type === 'refresh_token' && data?.error === 'invalid_grant';
+    const err = new Error(
+      expired ? 'Sua sessão expirou. Entre de novo.' : `O Spotify não renovou o login agora (${res.status}). Tente de novo.`,
+    );
+    if (expired) err.status = 401;
     throw err;
   }
   const data = await res.json();
@@ -117,16 +128,42 @@ export function logout() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-// Devolve um access token válido, renovando automaticamente se expirou.
-export async function getAccessToken() {
-  const token = loadToken();
-  if (!token) throw new Error('Não está logado.');
-  if (Date.now() < token.expires_at) return token.access_token;
+function notLoggedIn() {
+  const err = new Error('Não está logado.');
+  err.status = 401;
+  return err;
+}
 
-  const fresh = await requestToken({
-    grant_type: 'refresh_token',
-    refresh_token: token.refresh_token,
-    client_id: CLIENT_ID,
-  });
-  return fresh.access_token;
+// Renovação em andamento: quem pedir um token enquanto ela roda espera a mesma.
+let refreshing = null;
+
+// Devolve um access token válido, renovando automaticamente se expirou.
+// `rejected` = token que o Spotify acabou de recusar (401): força uma renovação.
+export async function getAccessToken(rejected) {
+  const token = loadToken();
+  if (!token) throw notLoggedIn();
+  if (Date.now() < token.expires_at && token.access_token !== rejected) return token.access_token;
+
+  // Cada refresh_token só vale UMA vez (o Spotify manda outro na resposta). Se duas
+  // requisições renovassem juntas, a segunda usaria um refresh_token já gasto e o
+  // Spotify responderia "sessão expirada". Por isso só uma renovação por vez.
+  refreshing ??= refreshOnce(token.access_token).finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function refreshOnce(staleToken) {
+  const run = async () => {
+    // Outra aba do app pode ter renovado enquanto esta esperava a vez.
+    const token = loadToken();
+    if (!token) throw notLoggedIn();
+    if (token.access_token !== staleToken && Date.now() < token.expires_at) return token.access_token;
+    const fresh = await requestToken({
+      grant_type: 'refresh_token',
+      refresh_token: token.refresh_token,
+      client_id: CLIENT_ID,
+    });
+    return fresh.access_token;
+  };
+  // navigator.locks: uma renovação por vez mesmo entre abas (ex: site + app instalado).
+  return navigator.locks ? navigator.locks.request('spotify-token-refresh', run) : run();
 }

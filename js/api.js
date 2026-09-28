@@ -23,14 +23,16 @@ function friendlyMessage(status, apiMessage) {
 
 // Requisição genérica com o token no cabeçalho. Aceita caminho ("/me") ou URL completa
 // (a API devolve URLs prontas no campo "next" pra buscar a próxima página).
-async function request(method, pathOrUrl, body) {
+async function request(method, pathOrUrl, body, retried = false) {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : API + pathOrUrl;
+  // Fora do try de baixo: se o login acabou de verdade, o erro sai com status 401.
+  const token = await getAccessToken();
   let res;
   try {
     res = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${await getAccessToken()}`,
+        Authorization: `Bearer ${token}`,
         ...(body && { 'Content-Type': 'application/json' }),
       },
       body: body && JSON.stringify(body),
@@ -39,6 +41,11 @@ async function request(method, pathOrUrl, body) {
     // Sem internet, wi-fi caindo, celular no bolso: erro de rede, não do Spotify.
     // Fica sem "status" de propósito: é assim que o app sabe que pode usar o cache.
     throw new Error('Sem internet (ou o Spotify não respondeu). Tente de novo.', { cause });
+  }
+  // Token recusado: renova e tenta mais uma vez antes de dar a sessão como expirada.
+  if (res.status === 401 && !retried) {
+    await getAccessToken(token);
+    return request(method, pathOrUrl, body, true);
   }
   if (!res.ok) {
     // O Spotify costuma mandar { error: { status, message } } no corpo.

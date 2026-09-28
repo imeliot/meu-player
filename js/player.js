@@ -206,7 +206,7 @@ async function poll() {
     if (remote?.device?.id) rememberDevice(remote.device.id);
     // O Spotify desliga o aparelho sozinho depois de um tempo parado. Ao voltar pro app,
     // tenta reconectar uma vez, sem incomodar.
-    if (!remote && isRemote() && reconnectOnNextPoll) {
+    if (!remote && mode === 'remote' && reconnectOnNextPoll) {
       reconnectOnNextPoll = false;
       reconnect()
         .then((name) => name && ($('#pb-status').textContent = `> reconectado: ${name}`))
@@ -226,10 +226,11 @@ async function poll() {
   } catch (err) {
     console.error(err);
     if (err.status === 401) return callbacks.onAuthError();
-    // 429 = muitas perguntas: espera o que o Spotify pedir (ou dobra o intervalo).
-    if (err.status === 429) {
-      pollDelay = Math.min(Math.max(err.retryAfter * 1000, pollDelay * 2), POLL_MAX_MS);
-    }
+    // Deu erro: pergunta mais devagar (dobra o intervalo, até 30s). Vale pra qualquer erro,
+    // porque o "muitas perguntas" (429) do Spotify chega sem os cabeçalhos que o navegador
+    // exige e aparece aqui como se fosse falta de internet. Insistir a cada 3s só
+    // prolongaria o bloqueio.
+    pollDelay = Math.min(Math.max((err.retryAfter ?? 0) * 1000, pollDelay * 2), POLL_MAX_MS);
   }
   schedulePoll();
 }
@@ -263,6 +264,7 @@ export function initPlayer(cbs) {
 
   if (mode === 'remote') {
     $('#pb-status').textContent = '> modo controle remoto: procurando dispositivo…';
+    reconnectOnNextPoll = true; // o spotify pode estar aberto, mas parado (não "ativo")
     schedulePoll(0);
     return;
   }
@@ -293,14 +295,26 @@ function switchToRemote(reason) {
   schedulePoll(0);
 }
 
+// Token pro SDK. Falha passageira (internet caiu, Spotify lento) tenta de novo algumas
+// vezes; antes, qualquer tropeço aqui deslogava no meio da música.
+async function tokenForSdk(attempt = 0) {
+  try {
+    return await getAccessToken();
+  } catch (err) {
+    if (err.status === 401 || attempt >= 2) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return tokenForSdk(attempt + 1);
+  }
+}
+
 function createPlayer() {
   player = new Spotify.Player({
     name: 'Meu Player (navegador)',
     // O SDK pede o token quando conecta e quando o token expira.
     getOAuthToken: (cb) =>
-      getAccessToken()
+      tokenForSdk()
         .then(cb)
-        .catch(() => callbacks.onAuthError()),
+        .catch((err) => (err.status === 401 ? callbacks.onAuthError() : callbacks.onError(err.message))),
     volume: savedVolume(),
     enableMediaSession: true, // teclas de mídia do teclado e controles do sistema
   });
@@ -368,7 +382,8 @@ function noDeviceError() {
 export async function playHere({ contextUri, uris, offset }) {
   const otherDevice = remote?.device?.is_active && remote.device.id !== deviceId ? remote.device.id : null;
   if (otherDevice || mode === 'remote') {
-    const target = otherDevice ?? targetDevice();
+    // Nenhum ativo? O app do Spotify pode estar aberto mas parado: toca direto nele.
+    const target = otherDevice ?? targetDevice() ?? (await findDevice())?.id;
     if (!target) throw noDeviceError();
     await api.play({ deviceId: target, contextUri, uris, offset });
     pollSoon();
@@ -401,14 +416,17 @@ function lastDeviceId() {
   }
 }
 
-// Procura os aparelhos da conta e assume o controle de um deles. Prefere o que já está
-// tocando, depois o último que você usou, e por fim qualquer um que aceite comandos.
-// Devolve o nome do aparelho, ou null se não houver nenhum ligado.
-export async function reconnect() {
+// Escolhe um aparelho da conta: o que já está tocando, depois o último que você usou, e
+// por fim qualquer um que aceite comandos. null se não houver nenhum ligado.
+async function findDevice() {
   const devices = (await api.getDevices())?.devices ?? [];
   const usable = devices.filter((d) => d.id && !d.is_restricted);
-  const target =
-    usable.find((d) => d.is_active) ?? usable.find((d) => d.id === lastDeviceId()) ?? usable[0];
+  return usable.find((d) => d.is_active) ?? usable.find((d) => d.id === lastDeviceId()) ?? usable[0] ?? null;
+}
+
+// Assume o controle desse aparelho. Devolve o nome dele, ou null se não achou nenhum.
+export async function reconnect() {
+  const target = await findDevice();
   if (!target) return null;
   if (!target.is_active) await api.transferPlayback(target.id, false);
   rememberDevice(target.id);
