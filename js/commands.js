@@ -2,6 +2,7 @@
 // Uso: await runCommand(':theme umbreon') → { ok: true, message: 'tema: umbreon' }
 import { setTheme, setFont, allThemes, FONTS } from './themes.js';
 import * as player from './player.js';
+import { fold } from './ui.js';
 
 // Funções que dependem da tela (playlists, música selecionada). O app registra na abertura.
 const app = {
@@ -16,10 +17,6 @@ const app = {
 export function registerApp(functions) {
   Object.assign(app, functions);
 }
-
-// Tira acentos e deixa minúsculo (pra comparar "musica" com "Música").
-export const fold = (text) =>
-  String(text).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
 const ok = (message) => ({ ok: true, message });
 const fail = (message) => ({ ok: false, message });

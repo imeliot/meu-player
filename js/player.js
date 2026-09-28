@@ -86,7 +86,7 @@ function savedVolume() {
 }
 
 function setControlsEnabled(enabled) {
-  for (const id of ['#pb-shuffle', '#pb-prev', '#pb-toggle', '#pb-next', '#pb-repeat', '#pb-progress']) {
+  for (const id of ['#pb-shuffle', '#pb-prev', '#pb-toggle', '#pb-next', '#pb-repeat', '#pb-progress', '#pb-add']) {
     $(id).disabled = !enabled;
   }
   // Volume: no remoto, só se o dispositivo aceitar (o app do iPhone costuma não aceitar).

@@ -9,7 +9,7 @@ import { initPlayer, playHere, currentTrack } from './player.js';
 import { initCmdline, hint, prefill, escapeNow } from './cmdline.js';
 import { initDevices, setDevicesShown } from './devices.js';
 import { initRoll } from './roll.js';
-import { registerApp, fold } from './commands.js';
+import { registerApp } from './commands.js';
 import { startBoot } from './boot.js';
 import { isThemePlaylist, syncFromPlaylists } from './themes.js';
 import * as pins from './pins.js';
@@ -28,6 +28,7 @@ import {
   confirmDialog,
   playlistFormDialog,
   pickPlaylistDialog,
+  fold,
 } from './ui.js';
 
 // ---------- Estado ----------
@@ -498,12 +499,33 @@ async function loadAllPlaylists() {
 }
 
 async function addToPlaylist(track) {
-  await loadAllPlaylists();
-  const target = await pickPlaylistDialog(playlists.filter(canEditItems), track.name);
+  const target = await choosePlaylist(track.name);
   if (!target) return;
 
   await addTrackTo(target, track);
   showNotice(`Adicionada a "${target.name}".`, 'success');
+}
+
+// Abre a janela "adicionar à playlist". Se escolher [+ nova playlist], cria na hora
+// (o texto da busca já vem como nome). Devolve a playlist ou null se cancelou.
+async function choosePlaylist(subject) {
+  await loadAllPlaylists();
+  const choice = await pickPlaylistDialog(playlists.filter(canEditItems), subject);
+  if (!choice || !('create' in choice)) return choice;
+
+  const data = await playlistFormDialog({ title: '> nova playlist', name: choice.create, askPublic: true });
+  if (!data) return null;
+  const created = await api.createPlaylist(data);
+  addCreatedPlaylist(created);
+  return created;
+}
+
+// Botão [+ playlist] da barra "tocando agora".
+function addCurrentToPlaylist() {
+  const track = currentTrack();
+  if (!track) throw new Error('nenhuma música tocando.');
+  if (isLocal(track)) throw new Error('arquivos locais não podem ser adicionados.');
+  return addToPlaylist(track);
 }
 
 async function addTrackTo(target, track) {
@@ -786,10 +808,7 @@ const playInAlbum = (track) =>
 // Manda o álbum todo pra uma playlist (o Spotify aceita 100 músicas por vez).
 async function addAlbumToPlaylist() {
   if (!albumTracks.length) throw new Error('o álbum ainda está carregando.');
-  const target = await pickPlaylistDialog(
-    playlists.filter(canEditItems),
-    `${openAlbum.name} · álbum inteiro (${albumTracks.length} músicas)`,
-  );
+  const target = await choosePlaylist(`${openAlbum.name} · álbum inteiro (${albumTracks.length} músicas)`);
   if (!target) return;
   const uris = albumTracks.filter((t) => !isLocal(t)).map((t) => t.uri);
   for (let i = 0; i < uris.length; i += 100) {
@@ -1461,6 +1480,7 @@ $('#config-open').addEventListener('click', () => showTab('config'));
 $('#queue-open').addEventListener('click', () => showTab('queue'));
 $('#devices-open').addEventListener('click', () => showTab('devices'));
 $('#queue-refresh').addEventListener('click', () => safely(refreshQueue));
+$('#pb-add').addEventListener('click', () => safely(addCurrentToPlaylist));
 for (const btn of document.querySelectorAll('.panel-close')) {
   btn.addEventListener('click', () => showTab('list'));
 }

@@ -263,6 +263,8 @@
               <button id="pb-toggle" class="btn-link pb-toggle" aria-label="Tocar">[ &gt; ]</button>
               <button id="pb-next" class="btn-link" aria-label="Próxima">[&gt;|]</button>
               <button id="pb-repeat" class="btn-link mode-btn" aria-label="Repetir: desligado"><span class="lbl-long">repeat</span><span class="lbl-short">rep</span>:<span class="mode-value">OFF</span></button>
+              <!-- Põe a música que está tocando numa playlist (nova ou que já existe) -->
+              <button id="pb-add" class="btn-link" aria-label="Adicionar a uma playlist"><span class="lbl-long">[+ playlist]</span><span class="lbl-short">[+]</span></button>
             </div>
           </div>
         </div>
@@ -352,6 +354,11 @@
       <dialog id="picker-dialog" class="dialog">
         <form method="dialog" class="box" data-title="adicionar à playlist">
           <p id="picker-track" class="dim"></p>
+          <label class="field picker-search">
+            <span class="dim">buscar:</span>
+            <input id="picker-search" type="text" autocomplete="off" enterkeyhint="go" placeholder="parte do nome" />
+          </label>
+          <button id="picker-new" value="new" class="btn-link accent picker-new">[+ nova playlist]</button>
           <ul id="picker-list" class="list picker-list"></ul>
           <div class="dialog-actions">
             <button value="" class="btn-link">[cancelar]</button>

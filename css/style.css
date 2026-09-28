@@ -946,6 +946,15 @@ html:has(#library-view:not([hidden])) body {
   margin: 0;
 }
 
+.picker-search {
+  margin-top: calc(var(--line-height) / 2);
+}
+
+.picker-new {
+  display: block;
+  margin: calc(var(--line-height) / 2) 0;
+}
+
 .picker-list {
   max-height: 50vh;
   overflow-y: auto;

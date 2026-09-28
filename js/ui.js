@@ -10,6 +10,10 @@ export function el(tag, className, text) {
   return node;
 }
 
+// Tira acentos e deixa minúsculo (pra comparar "musica" com "Música").
+export const fold = (text) =>
+  String(text).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
 export function formatDuration(ms) {
   if (!ms) return '--:--'; // o índice da biblioteca guarda música sem a duração
   const s = Math.round(ms / 1000);
@@ -122,25 +126,69 @@ export async function playlistFormDialog({ title, name = '', description = '', a
   };
 }
 
-// Mostra a lista de playlists pra escolher uma. Devolve a escolhida ou null.
-export async function pickPlaylistDialog(playlists, trackName) {
-  $('#picker-track').textContent = trackName;
+// Mostra a lista de playlists pra escolher uma, com busca pelo nome.
+// Devolve a escolhida, { create: 'texto da busca' } se clicou em [+ nova playlist],
+// ou null se cancelou.
+export async function pickPlaylistDialog(playlists, subject) {
+  const dialog = $('#picker-dialog');
+  const search = $('#picker-search');
+  const newBtn = $('#picker-new');
   const list = $('#picker-list');
-  list.replaceChildren();
+  $('#picker-track').textContent = subject;
+  search.value = '';
 
-  if (!playlists.length) {
-    list.append(el('li', 'dim', 'você ainda não tem playlists que possa editar.'));
-  }
-  for (const p of playlists) {
-    const li = el('li');
-    // Botão dentro de <form method="dialog">: clicar fecha a janela com value = id.
+  // Botão dentro de <form method="dialog">: clicar fecha a janela com value = id.
+  const items = playlists.map((p) => {
     const btn = el('button', 'lib-item');
     btn.value = p.id;
     btn.append(el('span', 'lib-name', p.name));
+    const li = el('li');
     li.append(btn);
-    list.append(li);
-  }
+    return { li, btn, name: fold(p.name) };
+  });
 
-  const id = await openDialog($('#picker-dialog'));
+  // Mostra só as playlists com o texto digitado; as que começam com ele vêm primeiro.
+  let shown = items;
+  const filter = () => {
+    const typed = fold(search.value.trim());
+    shown = [
+      ...items.filter((i) => i.name.startsWith(typed)),
+      ...items.filter((i) => !i.name.startsWith(typed) && i.name.includes(typed)),
+    ];
+    newBtn.textContent = typed ? `[+ nova playlist "${search.value.trim()}"]` : '[+ nova playlist]';
+    list.replaceChildren(...shown.map((i) => i.li));
+    // "> " na primeira: é a que o Enter escolhe
+    for (const i of items) i.btn.classList.toggle('selected', Boolean(typed) && i === shown[0]);
+    if (!shown.length) {
+      const empty = playlists.length ? 'nenhuma playlist com esse nome.' : 'você ainda não tem playlists que possa editar.';
+      list.append(el('li', 'dim', empty));
+    }
+  };
+  filter();
+
+  // Enter escolhe a primeira da lista; sem nenhuma, cria uma nova com o nome digitado.
+  // Com o campo vazio, não faz nada (sem isto, o Enter "apertaria" o primeiro botão).
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown' && shown.length) {
+      e.preventDefault();
+      shown[0].btn.focus();
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!search.value.trim()) return;
+    if (shown.length) dialog.close(shown[0].btn.value);
+    else if (search.value.trim()) dialog.close('new');
+  };
+  search.addEventListener('input', filter);
+  search.addEventListener('keydown', onKey);
+
+  const opened = openDialog(dialog);
+  // No celular, não abre o teclado sozinho (ele cobriria a lista); toque no campo pra buscar.
+  if (matchMedia('(pointer: coarse)').matches) search.blur();
+  const id = await opened;
+
+  search.removeEventListener('input', filter);
+  search.removeEventListener('keydown', onKey);
+  if (id === 'new') return { create: search.value.trim() };
   return playlists.find((p) => p.id === id) ?? null;
 }

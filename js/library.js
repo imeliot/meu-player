@@ -7,7 +7,7 @@
 // alteração, então as próximas atualizações leem só as playlists que mudaram.
 import * as api from './api.js';
 import { loadCache, saveCache } from './cache.js';
-import { fold } from './commands.js';
+import { fold } from './ui.js';
 
 const KEY = 'index';
 const PAUSE_MS = 700; // espaço entre playlists (o Spotify bloqueia quem pergunta demais)
